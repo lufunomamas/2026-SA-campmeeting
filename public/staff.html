@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staff — South Africa Campmeeting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    dialog { border: none; border-radius: 16px; padding: 0; max-width: 520px; width: 92vw; box-shadow: var(--shadow-md); background: var(--card); color: var(--ink); }
+    dialog::backdrop { background: rgba(20, 16, 8, 0.55); }
+    .dialog-inner { padding: 24px; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .checkin-btn { min-width: 108px; }
+    .team-group { margin-bottom: 22px; }
+    .team-group h4 { font-family: var(--font-body); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 10px; }
+    .team-card { display:flex; align-items:center; gap:12px; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background: var(--card); margin-bottom:8px; }
+    .team-swatch { width:14px; height:14px; border-radius:50%; flex:none; }
+    .team-card .info { flex:1; }
+    .team-card .info .name { font-weight:600; }
+    .team-card .info .meta { font-size:0.78rem; color:var(--ink-faint); }
+  </style>
+</head>
+<body>
+  <header class="site-header"><div id="site-nav"></div></header>
+
+  <div id="gate" class="gate-wrap">
+    <div class="card">
+      <p class="eyebrow">Staff area</p>
+      <h2>Sign in</h2>
+      <p style="font-size:0.88rem;">Ask an organizer for your username and PIN.</p>
+      <div id="gate-alert"></div>
+      <form id="pin-form">
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" autocomplete="username" autofocus>
+        </div>
+        <div class="field">
+          <label for="pin">PIN</label>
+          <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+      </form>
+    </div>
+  </div>
+
+  <main class="container section" id="app" style="display:none;">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Staff area &middot; <span id="whoami"></span></p>
+        <h1 style="margin-bottom:0;">Campmeeting control room</h1>
+      </div>
+      <button class="btn btn-quiet btn-sm" id="logout-btn">Log out</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="checkin">Check-In</button>
+      <button class="tab-btn admin-only" data-tab="registrations">Registrations</button>
+      <button class="tab-btn admin-only" data-tab="teams">Teams</button>
+      <button class="tab-btn admin-only" data-tab="roster">Duty roster</button>
+      <button class="tab-btn admin-only" data-tab="settings">Settings</button>
+    </div>
+
+    <!-- CHECK-IN -->
+    <section class="tab-panel active" id="tab-checkin">
+      <div class="toolbar">
+        <input type="search" id="checkin-search" placeholder="Search by name, phone or assembly…" style="min-width:260px;">
+        <button class="btn btn-quiet btn-sm" id="checkin-not-yet">Not yet arrived</button>
+        <div class="spacer"></div>
+        <button class="btn btn-primary btn-sm" id="add-walkin-btn">+ Add walk-in</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>From</th><th>Group</th><th>Contact</th><th>Status</th><th></th></tr></thead>
+          <tbody id="checkin-rows"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- REGISTRATIONS -->
+    <section class="tab-panel" id="tab-registrations">
+      <div class="toolbar">
+        <input type="search" id="reg-search" placeholder="Search…" style="min-width:220px;">
+        <select id="reg-province-filter"><option value="">All provinces</option></select>
+        <div class="spacer"></div>
+        <a class="btn btn-quiet btn-sm" href="/api/staff/attendees-export.csv" id="export-link">Export CSV</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>From</th><th>Group</th><th>Dates</th><th>Registered by</th><th>Status</th><th></th></tr></thead>
+          <tbody id="reg-rows"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TEAMS -->
+    <section class="tab-panel" id="tab-teams">
+      <div class="toolbar">
+        <p style="margin:0; color:var(--ink-faint); font-size:0.86rem;">Cooking, cleaning, or any other duty team — add as many as you need.</p>
+        <div class="spacer"></div>
+        <button class="btn btn-primary btn-sm" id="add-team-btn">+ Add team</button>
+      </div>
+      <div id="teams-list"><p class="empty-state">Loading…</p></div>
+    </section>
+
+    <!-- ROSTER ADMIN -->
+    <section class="tab-panel" id="tab-roster">
+      <div class="toolbar">
+        <p style="margin:0; color:var(--ink-faint); font-size:0.86rem;">Assign a team to a date and task.</p>
+        <div class="spacer"></div>
+        <button class="btn btn-primary btn-sm" id="add-duty-btn">+ Add duty</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Team</th><th>Task</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="duty-rows"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="tab-panel" id="tab-settings">
+      <div class="grid-2">
+        <div class="card">
+          <h3>Event details</h3>
+          <form id="settings-form">
+            <div class="field"><label for="s-name">Event name</label><input id="s-name" name="event_name"></div>
+            <div class="field"><label for="s-location">Location</label><input id="s-location" name="event_location"></div>
+            <div class="grid-2">
+              <div class="field"><label for="s-start">Start date</label><input id="s-start" name="event_start" type="date"></div>
+              <div class="field"><label for="s-end">End date</label><input id="s-end" name="event_end" type="date"></div>
+            </div>
+            <button class="btn btn-primary" type="submit">Save details</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Staff accounts</h3>
+          <p style="font-size:0.85rem;">Admins can manage teams, the roster and settings. Check-in accounts only see the Check-In tab.</p>
+          <div id="users-list" style="margin-bottom:16px;"><p class="empty-state">Loading…</p></div>
+          <button class="btn btn-primary btn-sm" id="add-user-btn" type="button">+ Add staff account</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Attendee dialog -->
+  <dialog id="attendee-dialog">
+    <form class="dialog-inner" id="attendee-form" method="dialog">
+      <h3 id="attendee-dialog-title">Add walk-in</h3>
+      <div class="field"><label for="a-fullName">Full name *</label><input id="a-fullName" name="fullName" required></div>
+      <div class="grid-2">
+        <div class="field"><label for="a-phone">Phone</label><input id="a-phone" name="phone"></div>
+        <div class="field"><label for="a-email">Email</label><input id="a-email" name="email"></div>
+      </div>
+      <div class="field"><label for="a-assembly">Assembly</label><input id="a-assembly" name="assembly"></div>
+      <div class="field">
+        <label>Origin</label>
+        <div class="radio-row">
+          <label><input type="radio" name="originType" value="province" checked> Province</label>
+          <label><input type="radio" name="originType" value="international"> Outside SA</label>
+        </div>
+      </div>
+      <div class="field" id="a-province-field"><label for="a-province">Province</label><select id="a-province" name="province"></select></div>
+      <div class="field" id="a-country-field" style="display:none;"><label for="a-country">Country</label><input id="a-country" name="country"></div>
+      <div class="grid-2">
+        <div class="field"><label for="a-numAdults">Adults</label><input id="a-numAdults" name="numAdults" type="number" min="1" value="1"></div>
+        <div class="field"><label for="a-numChildren">Children</label><input id="a-numChildren" name="numChildren" type="number" min="0" value="0"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label for="a-arrivalDate">Arrival</label><input id="a-arrivalDate" name="arrivalDate" type="date"></div>
+        <div class="field"><label for="a-departureDate">Departure</label><input id="a-departureDate" name="departureDate" type="date"></div>
+      </div>
+      <div class="field"><label for="a-notes">Notes</label><textarea id="a-notes" name="notes"></textarea></div>
+      <div class="field" id="a-checkedin-field">
+        <label><input type="checkbox" id="a-checkedIn" name="checkedIn" style="width:auto;"> Checked in now</label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-quiet" id="attendee-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="attendee-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Team dialog -->
+  <dialog id="team-dialog">
+    <form class="dialog-inner" id="team-form" method="dialog">
+      <h3 id="team-dialog-title">Add team</h3>
+      <div class="field"><label for="t-name">Team name *</label><input id="t-name" name="name" required placeholder="e.g. Gauteng Cooking Team"></div>
+      <div class="field">
+        <label for="t-category">Category *</label>
+        <input id="t-category" name="category" required list="category-options" placeholder="Cooking, Cleaning, Ushering…">
+        <datalist id="category-options"></datalist>
+      </div>
+      <div class="field"><label for="t-province">Province (optional)</label><select id="t-province" name="province"></select></div>
+      <div class="field"><label for="t-color">Colour</label><input id="t-color" name="color" type="color" value="#B07F26" style="height:44px;"></div>
+      <div class="field"><label for="t-notes">Notes</label><textarea id="t-notes" name="notes"></textarea></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-quiet" id="team-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Duty dialog -->
+  <dialog id="duty-dialog">
+    <form class="dialog-inner" id="duty-form" method="dialog">
+      <h3 id="duty-dialog-title">Add duty</h3>
+      <div class="field"><label for="d-team">Team *</label><select id="d-team" name="teamId" required></select></div>
+      <div class="field"><label for="d-date">Date *</label><input id="d-date" name="dutyDate" type="date" required></div>
+      <div class="field"><label for="d-task">Task *</label><input id="d-task" name="task" required placeholder="e.g. Prepare breakfast for 400"></div>
+      <div class="field"><label for="d-notes">Notes</label><textarea id="d-notes" name="notes"></textarea></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-quiet" id="duty-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Add user dialog -->
+  <dialog id="user-dialog">
+    <form class="dialog-inner" id="user-form" method="dialog">
+      <h3>Add staff account</h3>
+      <div class="field"><label for="u-username">Username *</label><input id="u-username" name="username" required autocomplete="off"></div>
+      <div class="field"><label for="u-pin">PIN *</label><input id="u-pin" name="pin" type="text" inputmode="numeric" minlength="4" required></div>
+      <div class="field">
+        <label>Access level *</label>
+        <div class="radio-row">
+          <label><input type="radio" name="role" value="checkin" checked> Check-in only</label>
+          <label><input type="radio" name="role" value="admin"> Admin (full access)</label>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-quiet" id="user-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Reset PIN dialog -->
+  <dialog id="reset-pin-dialog">
+    <form class="dialog-inner" id="reset-pin-form" method="dialog">
+      <h3 id="reset-pin-title">Reset PIN</h3>
+      <div class="field"><label for="rp-pin">New PIN *</label><input id="rp-pin" name="newPin" type="text" inputmode="numeric" minlength="4" required></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-quiet" id="reset-pin-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/provinces.js"></script>
+  <script src="/js/staff.js"></script>
+</body>
+</html>

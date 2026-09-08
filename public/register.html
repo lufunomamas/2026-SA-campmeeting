@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register — South Africa Campmeeting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="site-header"><div id="site-nav"></div></header>
+
+  <main class="container section" style="max-width: 720px;">
+    <p class="eyebrow">Registration</p>
+    <h1>Register for <span data-event-name>the campmeeting</span></h1>
+    <p>Tell us who's coming. This takes about two minutes — one form per household is fine, just note the number of adults and children.</p>
+
+    <div id="form-wrap" class="card" style="margin-top: 24px;">
+      <div id="alert-area"></div>
+      <form id="reg-form">
+        <fieldset>
+          <legend>Who's coming</legend>
+          <div class="field">
+            <label for="fullName">Full name *</label>
+            <input id="fullName" name="fullName" required placeholder="e.g. Thandiwe Nkosi" autocomplete="name">
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="phone">Phone number</label>
+              <input id="phone" name="phone" type="tel" placeholder="082 000 0000" autocomplete="tel">
+            </div>
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email">
+            </div>
+          </div>
+          <div class="field">
+            <label for="assembly">Home assembly / congregation</label>
+            <input id="assembly" name="assembly" placeholder="e.g. Apostolic Faith Mission, Soweto">
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Coming from</legend>
+          <div class="field">
+            <label>Origin *</label>
+            <div class="radio-row">
+              <label><input type="radio" name="originType" value="province" checked> A South African province</label>
+              <label><input type="radio" name="originType" value="international"> Outside South Africa</label>
+            </div>
+          </div>
+          <div class="field" id="province-field">
+            <label for="province">Province *</label>
+            <select id="province" name="province"></select>
+          </div>
+          <div class="field" id="country-field" style="display:none;">
+            <label for="country">Country *</label>
+            <input id="country" name="country" placeholder="e.g. Zimbabwe, Eswatini, USA">
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Group &amp; stay</legend>
+          <div class="grid-2">
+            <div class="field">
+              <label for="numAdults">Adults</label>
+              <input id="numAdults" name="numAdults" type="number" min="1" value="1">
+            </div>
+            <div class="field">
+              <label for="numChildren">Children</label>
+              <input id="numChildren" name="numChildren" type="number" min="0" value="0">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="arrivalDate">Arrival date</label>
+              <input id="arrivalDate" name="arrivalDate" type="date">
+            </div>
+            <div class="field">
+              <label for="departureDate">Departure date</label>
+              <input id="departureDate" name="departureDate" type="date">
+            </div>
+          </div>
+          <div class="field">
+            <label for="accommodation">Accommodation</label>
+            <select id="accommodation" name="accommodation">
+              <option value="">Not sure yet</option>
+              <option value="On-site — own tent/caravan">On-site — own tent/caravan</option>
+              <option value="On-site — dormitory">On-site — dormitory</option>
+              <option value="Off-site — own arrangement">Off-site — own arrangement</option>
+              <option value="Need help arranging">Need help arranging</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="notes">Anything else we should know</label>
+            <textarea id="notes" name="notes" placeholder="Dietary needs, mobility assistance, travelling as a group, etc."></textarea>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Submit registration</button>
+      </form>
+    </div>
+
+    <div id="confirmation" class="card" style="display:none; text-align:center; margin-top:24px;">
+      <p class="eyebrow">You're registered</p>
+      <h2 id="confirm-name" style="margin-bottom:6px;"></h2>
+      <p>Thank you — we've recorded your registration. See you at the campmeeting!</p>
+      <div style="display:flex; gap:12px; justify-content:center; margin-top:10px;">
+        <a class="btn btn-quiet" href="/roster.html">View duty roster</a>
+        <button class="btn btn-primary" id="another-btn">Register another person</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>&copy; <span id="year"></span> Apostolic Faith Church &middot; <span data-event-name>South Africa Campmeeting</span></span>
+      <a href="/staff.html">Staff sign in</a>
+    </div>
+  </footer>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/provinces.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    populateProvinceSelect(document.getElementById('province'));
+
+    document.querySelectorAll('input[name="originType"]').forEach((r) => {
+      r.addEventListener('change', () => {
+        const isIntl = document.querySelector('input[name="originType"]:checked').value === 'international';
+        document.getElementById('province-field').style.display = isIntl ? 'none' : '';
+        document.getElementById('country-field').style.display = isIntl ? '' : 'none';
+      });
+    });
+
+    const form = document.getElementById('reg-form');
+    const alertArea = document.getElementById('alert-area');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertArea.innerHTML = '';
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+
+      const fd = new FormData(form);
+      const payload = Object.fromEntries(fd.entries());
+
+      try {
+        const attendee = await api('/api/attendees', { method: 'POST', body: payload });
+        document.getElementById('form-wrap').style.display = 'none';
+        document.getElementById('confirmation').style.display = '';
+        document.getElementById('confirm-name').textContent = attendee.full_name;
+      } catch (err) {
+        alertArea.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+        btn.disabled = false;
+        btn.textContent = 'Submit registration';
+      }
+    });
+
+    document.getElementById('another-btn').addEventListener('click', () => {
+      form.reset();
+      populateProvinceSelect(document.getElementById('province'));
+      document.getElementById('confirmation').style.display = 'none';
+      document.getElementById('form-wrap').style.display = '';
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('submit-btn').textContent = 'Submit registration';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "campmeeting",
+  "version": "1.0.0",
+  "description": "Registration, check-in and duty roster system for the South Africa campmeeting",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "express-session": "^1.18.0",
+    "bcryptjs": "^2.4.3"
+  }
+}

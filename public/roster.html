@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Duty Roster — South Africa Campmeeting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="site-header"><div id="site-nav"></div></header>
+
+  <main class="container section">
+    <p class="eyebrow">Serving together</p>
+    <h1>Duty roster</h1>
+    <p>Cooking, cleaning and other team duties by date. Find your province or team below to see when you're serving.</p>
+
+    <div class="toolbar" style="margin-top:20px;">
+      <div class="field" style="margin:0;">
+        <label for="from-date">From</label>
+        <input type="date" id="from-date">
+      </div>
+      <div class="field" style="margin:0;">
+        <label for="to-date">To</label>
+        <input type="date" id="to-date">
+      </div>
+      <div class="field" style="margin:0; min-width:200px;">
+        <label for="team-filter">Team</label>
+        <select id="team-filter"><option value="">All teams</option></select>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-quiet btn-sm" id="clear-filters">Clear filters</button>
+    </div>
+
+    <div id="roster-list"><p class="empty-state">Loading…</p></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>&copy; <span id="year"></span> Apostolic Faith Church &middot; <span data-event-name>South Africa Campmeeting</span></span>
+      <a href="/staff.html">Staff sign in</a>
+    </div>
+  </footer>
+
+  <script src="/js/common.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    async function loadTeamsFilter() {
+      const teams = await api('/api/teams');
+      const sel = document.getElementById('team-filter');
+      teams.forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `${t.name} (${t.category})`;
+        sel.appendChild(opt);
+      });
+    }
+
+    async function loadRoster() {
+      const list = document.getElementById('roster-list');
+      list.innerHTML = '<p class="empty-state">Loading…</p>';
+      const params = new URLSearchParams();
+      const from = document.getElementById('from-date').value;
+      const to = document.getElementById('to-date').value;
+      const team = document.getElementById('team-filter').value;
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      if (team) params.set('team_id', team);
+
+      try {
+        const duties = await api(`/api/roster?${params.toString()}`);
+        if (!duties.length) {
+          list.innerHTML = '<p class="empty-state">No duties found for this filter.</p>';
+          return;
+        }
+        const byDate = {};
+        duties.forEach((d) => (byDate[d.duty_date] = byDate[d.duty_date] || []).push(d));
+        list.innerHTML = Object.entries(byDate)
+          .map(
+            ([date, items]) => `
+            <div class="roster-day">
+              <h3>${fmtDate(date)}</h3>
+              ${items
+                .map(
+                  (d) => `
+                <div class="duty-item" style="border-left-color:${d.team_color}">
+                  <div class="body">
+                    <div class="task">${d.task}</div>
+                    <div class="meta">${d.team_name} · ${d.team_category}${d.team_province ? ' · ' + d.team_province : ''}${d.notes ? ' — ' + d.notes : ''}</div>
+                  </div>
+                </div>`
+                )
+                .join('')}
+            </div>`
+          )
+          .join('');
+      } catch (e) {
+        list.innerHTML = '<p class="empty-state">Could not load the roster.</p>';
+      }
+    }
+
+    document.getElementById('from-date').addEventListener('change', loadRoster);
+    document.getElementById('to-date').addEventListener('change', loadRoster);
+    document.getElementById('team-filter').addEventListener('change', loadRoster);
+    document.getElementById('clear-filters').addEventListener('click', () => {
+      document.getElementById('from-date').value = '';
+      document.getElementById('to-date').value = '';
+      document.getElementById('team-filter').value = '';
+      loadRoster();
+    });
+
+    loadTeamsFilter();
+    loadRoster();
+  </script>
+</body>
+</html>
