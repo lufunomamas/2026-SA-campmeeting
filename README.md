@@ -88,6 +88,28 @@ DATA_DIR=/srv/campmeeting-data SESSION_SECRET=<random> PORT=3000 npm start
 Put it behind a reverse proxy (nginx/Caddy) for HTTPS, and run it under a process
 manager (pm2 / systemd) so it restarts on crash or reboot.
 
+### Option D — genuinely free, more setup
+
+Render/Railway free tiers don't persist local files, but a free *hosted database* (e.g.
+[Neon](https://neon.tech) or [Supabase](https://supabase.com), both have a free Postgres
+tier) does. That needs swapping the `node:sqlite` layer in `server/db.js` for a Postgres
+client — a real code change, not just a config change, so it's not done here. Ask if you'd
+like this built.
+
+## Getting this into GitHub
+
+This folder is already a git repo with one commit. To push it:
+
+1. Create an empty repository on [github.com/new](https://github.com/new) — don't
+   initialize it with a README (this folder already has one).
+2. Copy the repo URL it gives you, then run:
+   ```bash
+   git remote add origin <the-url-github-gave-you>
+   git push -u origin main
+   ```
+   Git/Windows will pop up a browser window for you to sign in — nothing to paste here.
+3. That repo is what you connect to Render (or Railway) in the steps above.
+
 ## Environment variables
 
 | Variable         | Purpose                                                        | Default             |

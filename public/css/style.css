@@ -175,6 +175,7 @@ a { color: var(--green); }
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .nav-links a:hover { background: var(--gold-soft); color: var(--ink); }
@@ -195,7 +196,7 @@ a { color: var(--green); }
     display: none;
   }
   .nav-links.open { display: flex; }
-  .nav-links a { text-align: left; }
+  .nav-links a { text-align: left; padding: 13px 14px; }
   .nav-toggle {
     display: inline-flex;
     align-items: center;
@@ -240,7 +241,7 @@ a { color: var(--green); }
 .btn-quiet:hover { background: var(--paper-deep); color: var(--ink); }
 .btn-danger { border-color: var(--brick); color: var(--brick); }
 .btn-danger:hover { background: var(--brick); color: var(--paper); }
-.btn-sm { padding: 7px 14px; font-size: 0.68rem; }
+.btn-sm { padding: 10px 14px; font-size: 0.68rem; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 .btn-block { width: 100%; justify-content: center; }
 
@@ -369,8 +370,8 @@ a.contact-card:hover { border-color: var(--gold); transform: translateY(-1px); }
 .social-row a.social-item:hover { color: var(--green); }
 
 /* ============ Layout helpers ============ */
-.section { padding: 44px 0; }
-.section-tight { padding: 28px 0; }
+.section { padding-top: 44px; padding-bottom: 44px; }
+.section-tight { padding-top: 28px; padding-bottom: 28px; }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 
 .stat-row {
@@ -425,7 +426,7 @@ a.contact-card:hover { border-color: var(--gold); transform: translateY(-1px); }
 .field .hint { font-size: 0.76rem; color: var(--ink-faint); }
 input, select, textarea {
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: 16px;
   padding: 11px 13px;
   border-radius: 9px;
   border: 1.5px solid var(--line);
@@ -502,7 +503,7 @@ td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 /* ============ Tabs ============ */
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 22px; flex-wrap: wrap; }
 .tab-btn {
-  padding: 10px 16px;
+  padding: 13px 16px;
   border: none;
   background: none;
   font-family: var(--font-body);
