@@ -636,7 +636,7 @@ td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 .budget-division-head .head-name { font-size: 0.78rem; color: var(--ink-faint); }
 .budget-row {
   display: grid;
-  grid-template-columns: 1.6fr repeat(4, 1fr) auto;
+  grid-template-columns: 1.6fr repeat(5, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 11px 18px;
@@ -644,6 +644,18 @@ td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
   font-size: 0.86rem;
 }
 .budget-row:last-child { border-bottom: none; }
+.budget-header {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 18px 8px;
+  border-bottom: none;
+}
+@media (max-width: 760px) {
+  .budget-header { display: none; }
+}
 .budget-row.totals { font-weight: 700; background: var(--paper-deep); }
 .budget-row .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
 .budget-row .amount-negative { color: var(--brick); }
@@ -657,7 +669,7 @@ td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 }
 .budget-grand-total {
   display: grid;
-  grid-template-columns: 1.6fr repeat(4, 1fr) auto;
+  grid-template-columns: 1.6fr repeat(5, 1fr) auto;
   gap: 10px;
   padding: 14px 18px;
   font-weight: 700;

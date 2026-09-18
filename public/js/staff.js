@@ -733,7 +733,18 @@ async function loadBudget() {
 
     const grand = { approved: 0, disbursed: 0, refunded: 0, net: 0, overUnder: 0 };
 
-    el.innerHTML = Object.entries(byDivision)
+    const header = `
+      <div class="budget-row budget-header">
+        <div>Sub-Committee</div>
+        <div class="num">Approved Budget</div>
+        <div class="num">Actual Disbursed</div>
+        <div class="num">Refunded</div>
+        <div class="num">Net</div>
+        <div class="num">Over/Under Spending</div>
+        <div></div>
+      </div>`;
+
+    el.innerHTML = header + Object.entries(byDivision)
       .map(([division, rows]) => {
         const headName = rows[0].head_name || '';
         const sub = { approved: 0, disbursed: 0, refunded: 0, net: 0, overUnder: 0 };
@@ -751,6 +762,7 @@ async function loadBudget() {
               <div class="num"><span class="budget-col-label">Approved</span>${fmtMoney(r.approved_budget)}</div>
               <div class="num"><span class="budget-col-label">Disbursed</span>${fmtMoney(r.actual_disbursed)}</div>
               <div class="num"><span class="budget-col-label">Refunded</span>${fmtMoney(r.refunded)}</div>
+              <div class="num"><span class="budget-col-label">Net</span>${fmtMoney(r.net)}</div>
               <div class="num ${overUnderClass}"><span class="budget-col-label">Over/Under</span>${fmtMoney(r.over_under)}</div>
               <div><button class="btn btn-sm btn-quiet edit-budget-btn" data-id="${r.subcommittee_id}">Edit</button></div>
             </div>`;
@@ -773,6 +785,7 @@ async function loadBudget() {
             <div class="num">${fmtMoney(sub.approved)}</div>
             <div class="num">${fmtMoney(sub.disbursed)}</div>
             <div class="num">${fmtMoney(sub.refunded)}</div>
+            <div class="num">${fmtMoney(sub.net)}</div>
             <div class="num ${sub.overUnder < 0 ? 'amount-negative' : 'amount-positive'}">${fmtMoney(sub.overUnder)}</div>
             <div></div>
           </div>
@@ -784,6 +797,7 @@ async function loadBudget() {
         <div class="num">${fmtMoney(grand.approved)}</div>
         <div class="num">${fmtMoney(grand.disbursed)}</div>
         <div class="num">${fmtMoney(grand.refunded)}</div>
+        <div class="num">${fmtMoney(grand.net)}</div>
         <div class="num">${fmtMoney(grand.overUnder)}</div>
         <div></div>
       </div>`;
