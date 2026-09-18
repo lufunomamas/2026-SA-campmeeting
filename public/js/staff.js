@@ -883,7 +883,7 @@ async function loadBudget() {
               <div class="num"><span class="budget-col-label">Refunded</span>${fmtMoney(r.refunded)}</div>
               <div class="num"><span class="budget-col-label">Net</span>${fmtMoney(r.net)}</div>
               <div class="num ${overUnderClass}"><span class="budget-col-label">Over/Under</span>${fmtMoney(r.over_under)}</div>
-              <div><button class="btn btn-sm btn-quiet edit-budget-btn" data-id="${r.subcommittee_id}">Edit</button></div>
+              <div>${currentRole === 'admin' ? `<button class="btn btn-sm btn-quiet edit-budget-btn" data-id="${r.subcommittee_id}">Edit</button>` : ''}</div>
             </div>`;
           })
           .join('');

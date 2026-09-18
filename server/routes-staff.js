@@ -458,7 +458,11 @@ router.get('/budget', requireRequisitionAccess, (req, res) => {
   res.json({ year, currentYear: CURRENT_YEAR, lines: withTotals });
 });
 
-router.post('/budget', requireRequisitionAccess, (req, res) => {
+// Editing budget lines (approved/disbursed/refunded amounts) is super-admin
+// only. Department admins can view their division's budget (GET below) and
+// approve requisitions, which feeds Actual Disbursed automatically, but
+// can't directly change the numbers.
+router.post('/budget', requireAdmin, (req, res) => {
   const b = req.body || {};
   const subcommitteeId = Number(b.subcommitteeId);
   const year = Number(b.year);
@@ -466,10 +470,6 @@ router.post('/budget', requireRequisitionAccess, (req, res) => {
 
   const sub = db.prepare('SELECT id, division_id FROM subcommittees WHERE id = ?').get(subcommitteeId);
   if (!sub) return res.status(400).json({ error: 'Unknown sub-committee.' });
-  const myDivisionId = scopeDivisionId(req);
-  if (myDivisionId && sub.division_id !== myDivisionId) {
-    return res.status(403).json({ error: 'This sub-committee belongs to another division.' });
-  }
 
   db.prepare(`
     INSERT INTO budget_lines (subcommittee_id, year, approved_budget, manual_disbursed, manual_refunded)
