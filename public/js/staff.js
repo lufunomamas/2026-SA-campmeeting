@@ -1,22 +1,50 @@
 let teamsCache = [];
 let currentRole = null;
 let currentUsername = null;
+let currentDivisionId = null;
+let currentDivisionName = null;
+
+const ROLE_LABEL = { admin: 'super admin', department_admin: 'department admin', checkin: 'check-in' };
 
 async function checkSession() {
-  const { loggedIn, role, username } = await api('/api/staff/session');
-  if (loggedIn) showApp(role, username);
+  const { loggedIn, role, username, divisionId, divisionName } = await api('/api/staff/session');
+  if (loggedIn) showApp(role, username, divisionId, divisionName);
 }
 
-function showApp(role, username) {
+function showApp(role, username, divisionId, divisionName) {
   currentRole = role;
   currentUsername = username;
+  currentDivisionId = divisionId || null;
+  currentDivisionName = divisionName || null;
+
   document.getElementById('gate').style.display = 'none';
   document.getElementById('app').style.display = '';
-  document.getElementById('whoami').textContent = `${username} (${role === 'admin' ? 'admin' : 'check-in'})`;
-  document.querySelectorAll('.admin-only').forEach((el) => {
+
+  const tabs = [...document.querySelectorAll('.tab-btn')];
+  let firstVisible = null;
+  tabs.forEach((btn) => {
+    const allowed = (btn.dataset.roles || '').split(',');
+    const visible = allowed.includes(role);
+    btn.style.display = visible ? '' : 'none';
+    if (visible && !firstVisible) firstVisible = btn;
+  });
+  if (firstVisible && !tabs.some((b) => b.classList.contains('active') && b.style.display !== 'none')) {
+    tabs.forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+    firstVisible.classList.add('active');
+    document.getElementById(`tab-${firstVisible.dataset.tab}`).classList.add('active');
+  }
+
+  document.querySelectorAll('.super-admin-only').forEach((el) => {
     el.style.display = role === 'admin' ? '' : 'none';
   });
+
   initApp();
+
+  const roleLabel = ROLE_LABEL[role] || role;
+  document.getElementById('whoami').textContent = divisionName
+    ? `${username} (${roleLabel} — ${divisionName})`
+    : `${username} (${roleLabel})`;
 }
 
 document.getElementById('pin-form').addEventListener('submit', async (e) => {
@@ -26,8 +54,9 @@ document.getElementById('pin-form').addEventListener('submit', async (e) => {
   const alertArea = document.getElementById('gate-alert');
   alertArea.innerHTML = '';
   try {
-    const { role } = await api('/api/staff/login', { method: 'POST', body: { username, pin } });
-    showApp(role, username.trim().toLowerCase());
+    await api('/api/staff/login', { method: 'POST', body: { username, pin } });
+    const session = await api('/api/staff/session');
+    showApp(session.role, session.username, session.divisionId, session.divisionName);
   } catch (err) {
     alertArea.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
   }
@@ -50,6 +79,10 @@ const TAB_REFRESH = {
 };
 
 function initApp() {
+  const canCheckin = currentRole === 'admin' || currentRole === 'checkin';
+  const canRequisitions = currentRole === 'admin' || currentRole === 'department_admin';
+  const isSuperAdmin = currentRole === 'admin';
+
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
@@ -63,19 +96,35 @@ function initApp() {
 
   populateProvinceSelect(document.getElementById('a-province'));
 
-  document.getElementById('checkin-search').addEventListener('input', debounce(loadCheckin, 250));
-  document.getElementById('checkin-not-yet').addEventListener('click', (e) => {
-    e.target.classList.toggle('active');
-    loadCheckin();
-  });
+  if (canCheckin) {
+    document.getElementById('checkin-search').addEventListener('input', debounce(loadCheckin, 250));
+    document.getElementById('checkin-not-yet').addEventListener('click', (e) => {
+      e.target.classList.toggle('active');
+      loadCheckin();
+    });
+  }
 
-  if (appInited) { loadCheckin(); return; }
+  if (appInited) {
+    if (canCheckin) loadCheckin();
+    return;
+  }
   appInited = true;
 
-  wireAttendeeDialog();
-  loadCheckin();
+  if (canCheckin) {
+    wireAttendeeDialog();
+    loadCheckin();
+  }
 
-  if (currentRole !== 'admin') return;
+  if (canRequisitions) {
+    wireRequisitions();
+    wireBudget();
+    loadSubcommitteesCache().then(() => {
+      loadRequisitions();
+      loadBudget();
+    });
+  }
+
+  if (!isSuperAdmin) return;
 
   populateProvinceSelect(document.getElementById('t-province'), '— None —');
   populateProvinceSelect(document.getElementById('reg-province-filter'), 'All provinces');
@@ -84,8 +133,6 @@ function initApp() {
   wireDutyDialog();
   wireSettings();
   wireUserDialogs();
-  wireRequisitions();
-  wireBudget();
 
   document.getElementById('reg-search').addEventListener('input', debounce(loadRegistrations, 250));
   document.getElementById('reg-province-filter').addEventListener('change', loadRegistrations);
@@ -95,10 +142,6 @@ function initApp() {
     loadDuties();
   });
   loadUsers();
-  loadSubcommitteesCache().then(() => {
-    loadRequisitions();
-    loadBudget();
-  });
 }
 
 function debounce(fn, ms) {
@@ -477,25 +520,49 @@ function wireSettings() {
 }
 
 // ---- Staff accounts ----
+const ROLE_ROW_LABEL = { admin: 'Super admin — full access', department_admin: 'Department admin', checkin: 'Check-in only' };
+let divisionsCache = [];
+let usersCache = [];
+
+async function loadDivisionsCache() {
+  if (divisionsCache.length) return divisionsCache;
+  const { divisions } = await api('/api/staff/divisions');
+  divisionsCache = divisions;
+  return divisions;
+}
+
+function populateDivisionSelect(select) {
+  select.innerHTML = divisionsCache.map((d) => `<option value="${d.id}">${d.name}</option>`).join('');
+}
+
 async function loadUsers() {
   const el = document.getElementById('users-list');
   try {
-    const users = await api('/api/staff/users');
-    el.innerHTML = users
-      .map(
-        (u) => `
+    await loadDivisionsCache();
+    populateDivisionSelect(document.getElementById('u-division'));
+    populateDivisionSelect(document.getElementById('eu-division'));
+    usersCache = await api('/api/staff/users');
+    el.innerHTML = usersCache
+      .map((u) => {
+        const roleLabel = ROLE_ROW_LABEL[u.role] || u.role;
+        const meta = u.role === 'department_admin' && u.division_name ? `${roleLabel} — ${u.division_name}` : roleLabel;
+        return `
       <div class="team-card">
         <div class="info">
           <div class="name">${u.username}${u.username === currentUsername ? ' <span class="badge">You</span>' : ''}</div>
-          <div class="meta">${u.role === 'admin' ? 'Admin — full access' : 'Check-in only'}</div>
+          <div class="meta">${meta}</div>
         </div>
         <div class="row-actions">
+          <button class="btn btn-sm btn-quiet edit-user-btn" data-id="${u.id}">Edit</button>
           <button class="btn btn-sm btn-quiet reset-pin-btn" data-id="${u.id}" data-username="${u.username}">Reset PIN</button>
           <button class="btn btn-sm btn-danger del-user-btn" data-id="${u.id}">Delete</button>
         </div>
-      </div>`
-      )
+      </div>`;
+      })
       .join('');
+    el.querySelectorAll('.edit-user-btn').forEach((btn) =>
+      btn.addEventListener('click', () => openEditUserDialog(usersCache.find((u) => u.id == btn.dataset.id)))
+    );
     el.querySelectorAll('.reset-pin-btn').forEach((btn) =>
       btn.addEventListener('click', () => openResetPinDialog(btn.dataset.id, btn.dataset.username))
     );
@@ -516,11 +583,25 @@ async function loadUsers() {
   }
 }
 
+function toggleDivisionField(roleRadios, divisionField, divisionSelect) {
+  const role = [...roleRadios].find((r) => r.checked)?.value;
+  const show = role === 'department_admin';
+  divisionField.style.display = show ? '' : 'none';
+  divisionSelect.required = show;
+}
+
 function wireUserDialogs() {
   const userDialog = document.getElementById('user-dialog');
   const userForm = document.getElementById('user-form');
+  const userDivisionField = document.getElementById('u-division-field');
+  const userDivisionSelect = document.getElementById('u-division');
+  const userRoleRadios = userForm.querySelectorAll('input[name="role"]');
+
+  userRoleRadios.forEach((r) => r.addEventListener('change', () => toggleDivisionField(userRoleRadios, userDivisionField, userDivisionSelect)));
+
   document.getElementById('add-user-btn').addEventListener('click', () => {
     userForm.reset();
+    toggleDivisionField(userRoleRadios, userDivisionField, userDivisionSelect);
     userDialog.showModal();
   });
   document.getElementById('user-cancel').addEventListener('click', () => userDialog.close());
@@ -531,6 +612,29 @@ function wireUserDialogs() {
       await api('/api/staff/users', { method: 'POST', body: Object.fromEntries(fd.entries()) });
       toast('Staff account added');
       userDialog.close();
+      loadUsers();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  // Edit permissions dialog
+  const editDialog = document.getElementById('edit-user-dialog');
+  const editForm = document.getElementById('edit-user-form');
+  const editDivisionField = document.getElementById('eu-division-field');
+  const editDivisionSelect = document.getElementById('eu-division');
+  const editRoleRadios = editForm.querySelectorAll('input[name="role"]');
+  editRoleRadios.forEach((r) => r.addEventListener('change', () => toggleDivisionField(editRoleRadios, editDivisionField, editDivisionSelect)));
+
+  document.getElementById('edit-user-cancel').addEventListener('click', () => editDialog.close());
+  editForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(editForm);
+    const payload = Object.fromEntries(fd.entries());
+    try {
+      await api(`/api/staff/users/${editDialog.dataset.userId}`, { method: 'PATCH', body: payload });
+      toast('Permissions updated');
+      editDialog.close();
       loadUsers();
     } catch (err) {
       toast(err.message, true);
@@ -550,6 +654,17 @@ function wireUserDialogs() {
       toast(err.message, true);
     }
   });
+}
+
+function openEditUserDialog(user) {
+  const dialog = document.getElementById('edit-user-dialog');
+  const form = document.getElementById('edit-user-form');
+  dialog.dataset.userId = user.id;
+  document.getElementById('edit-user-title').textContent = `Edit ${user.username}`;
+  form.querySelector(`input[name="role"][value="${user.role}"]`).checked = true;
+  if (user.division_id) document.getElementById('eu-division').value = user.division_id;
+  toggleDivisionField(form.querySelectorAll('input[name="role"]'), document.getElementById('eu-division-field'), document.getElementById('eu-division'));
+  dialog.showModal();
 }
 
 function openResetPinDialog(id, username) {

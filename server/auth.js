@@ -3,11 +3,12 @@ const { db } = require('./db');
 
 const DEFAULT_USERNAME = process.env.ADMIN_USERNAME || 'lufunom';
 const DEFAULT_PIN = process.env.ADMIN_PIN || '3698';
+const ROLES = ['admin', 'department_admin', 'checkin'];
 
 function ensureDefaultAdminSeeded() {
   const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (count === 0) {
-    createUser(DEFAULT_USERNAME, DEFAULT_PIN, 'admin');
+    createUser(DEFAULT_USERNAME, DEFAULT_PIN, 'admin', null);
   }
 }
 
@@ -15,26 +16,71 @@ function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
-function createUser(username, pin, role) {
+function createUser(username, pin, role, divisionId) {
   const uname = normalizeUsername(username);
   if (!uname) throw Object.assign(new Error('Username is required.'), { status: 400 });
   if (!pin || String(pin).length < 4) {
     throw Object.assign(new Error('PIN must be at least 4 characters.'), { status: 400 });
   }
-  if (role !== 'admin' && role !== 'checkin') {
-    throw Object.assign(new Error('Role must be admin or checkin.'), { status: 400 });
+  if (!ROLES.includes(role)) {
+    throw Object.assign(new Error('Role must be admin, department_admin, or checkin.'), { status: 400 });
   }
+  const divId = validateDivisionForRole(role, divisionId);
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(uname);
   if (existing) throw Object.assign(new Error('That username is already taken.'), { status: 409 });
 
   const result = db
-    .prepare('INSERT INTO users (username, pin_hash, role) VALUES (?, ?, ?)')
-    .run(uname, bcrypt.hashSync(String(pin), 10), role);
-  return db.prepare('SELECT id, username, role, created_at FROM users WHERE id = ?').get(result.lastInsertRowid);
+    .prepare('INSERT INTO users (username, pin_hash, role, division_id) VALUES (?, ?, ?, ?)')
+    .run(uname, bcrypt.hashSync(String(pin), 10), role, divId);
+  return getUserById(result.lastInsertRowid);
+}
+
+function validateDivisionForRole(role, divisionId) {
+  if (role !== 'department_admin') return null;
+  const id = Number(divisionId);
+  if (!id) throw Object.assign(new Error('A division is required for department admin accounts.'), { status: 400 });
+  const division = db.prepare('SELECT id FROM divisions WHERE id = ?').get(id);
+  if (!division) throw Object.assign(new Error('Unknown division.'), { status: 400 });
+  return id;
+}
+
+function getUserById(id) {
+  return db
+    .prepare(`
+      SELECT u.id, u.username, u.role, u.division_id, d.name AS division_name, u.created_at
+      FROM users u LEFT JOIN divisions d ON d.id = u.division_id
+      WHERE u.id = ?
+    `)
+    .get(id);
 }
 
 function listUsers() {
-  return db.prepare('SELECT id, username, role, created_at FROM users ORDER BY created_at').all();
+  return db
+    .prepare(`
+      SELECT u.id, u.username, u.role, u.division_id, d.name AS division_name, u.created_at
+      FROM users u LEFT JOIN divisions d ON d.id = u.division_id
+      ORDER BY u.created_at
+    `)
+    .all();
+}
+
+function updateUser(id, { role, divisionId }) {
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!target) throw Object.assign(new Error('Account not found.'), { status: 404 });
+
+  const nextRole = role !== undefined ? role : target.role;
+  if (!ROLES.includes(nextRole)) {
+    throw Object.assign(new Error('Role must be admin, department_admin, or checkin.'), { status: 400 });
+  }
+  if (target.role === 'admin' && nextRole !== 'admin') {
+    const adminCount = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
+    if (adminCount <= 1) {
+      throw Object.assign(new Error('Cannot change the role of the last remaining admin account.'), { status: 400 });
+    }
+  }
+  const divId = validateDivisionForRole(nextRole, divisionId !== undefined ? divisionId : target.division_id);
+  db.prepare('UPDATE users SET role = ?, division_id = ? WHERE id = ?').run(nextRole, divId, id);
+  return getUserById(id);
 }
 
 function deleteUser(id) {
@@ -56,26 +102,44 @@ function resetUserPin(id, newPin) {
   db.prepare('UPDATE users SET pin_hash = ? WHERE id = ?').run(bcrypt.hashSync(String(newPin), 10), id);
 }
 
-/** Returns the user row ({id, username, role}) on success, or null. */
+/** Returns the user row ({id, username, role, division_id}) on success, or null. */
 function verifyLogin(username, pin) {
   const uname = normalizeUsername(username);
   if (!uname || !pin) return null;
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(uname);
   if (!user) return null;
   if (!bcrypt.compareSync(String(pin), user.pin_hash)) return null;
-  return { id: user.id, username: user.username, role: user.role };
+  return { id: user.id, username: user.username, role: user.role, divisionId: user.division_id };
 }
 
-/** Any signed-in staff member — check-in volunteer or admin. */
+/** Any signed-in staff member — check-in volunteer, department admin, or admin. */
 function requireStaff(req, res, next) {
   if (req.session && req.session.role) return next();
   return res.status(401).json({ error: 'Staff login required.' });
 }
 
-/** Admins only — team/roster/settings management, edits, deletes, exports. */
+/** Full admins only — team/roster/settings management, staff accounts, full exports/imports. */
 function requireAdmin(req, res, next) {
   if (req.session && req.session.role === 'admin') return next();
   return res.status(403).json({ error: 'Admin access required.' });
+}
+
+/** Admins or department admins — requisitions/budget, scoped to their division for the latter. */
+function requireRequisitionAccess(req, res, next) {
+  if (req.session && (req.session.role === 'admin' || req.session.role === 'department_admin')) return next();
+  return res.status(403).json({ error: 'Admin or department admin access required.' });
+}
+
+/** Admins or check-in volunteers — attendee check-in. Department admins are scoped to
+ * requisitions/budget only and don't get attendee access. */
+function requireCheckinAccess(req, res, next) {
+  if (req.session && (req.session.role === 'admin' || req.session.role === 'checkin')) return next();
+  return res.status(403).json({ error: 'Admin or check-in access required.' });
+}
+
+/** null for a full admin (no restriction); the caller's division id otherwise. */
+function scopeDivisionId(req) {
+  return req.session.role === 'department_admin' ? req.session.divisionId : null;
 }
 
 module.exports = {
@@ -83,10 +147,14 @@ module.exports = {
   verifyLogin,
   createUser,
   listUsers,
+  updateUser,
   deleteUser,
   resetUserPin,
   requireStaff,
   requireAdmin,
+  requireRequisitionAccess,
+  requireCheckinAccess,
+  scopeDivisionId,
   DEFAULT_USERNAME,
   DEFAULT_PIN,
 };

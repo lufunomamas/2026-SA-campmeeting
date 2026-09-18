@@ -7,10 +7,14 @@ const {
   verifyLogin,
   createUser,
   listUsers,
+  updateUser,
   deleteUser,
   resetUserPin,
   requireStaff,
   requireAdmin,
+  requireRequisitionAccess,
+  requireCheckinAccess,
+  scopeDivisionId,
 } = require('./auth');
 
 const router = express.Router();
@@ -22,6 +26,7 @@ router.post('/login', (req, res) => {
   req.session.role = user.role;
   req.session.userId = user.id;
   req.session.username = user.username;
+  req.session.divisionId = user.divisionId;
   res.json({ ok: true, role: user.role, username: user.username });
 });
 
@@ -31,7 +36,15 @@ router.post('/logout', (req, res) => {
 
 router.get('/session', (req, res) => {
   const role = (req.session && req.session.role) || null;
-  res.json({ loggedIn: !!role, role, username: (req.session && req.session.username) || null });
+  const divisionId = (req.session && req.session.divisionId) || null;
+  const division = divisionId ? db.prepare('SELECT name FROM divisions WHERE id = ?').get(divisionId) : null;
+  res.json({
+    loggedIn: !!role,
+    role,
+    username: (req.session && req.session.username) || null,
+    divisionId,
+    divisionName: division ? division.name : null,
+  });
 });
 
 router.use(requireStaff);
@@ -41,7 +54,7 @@ router.use(requireStaff);
 // both check-in volunteers and admins. Full edit, delete and export are
 // admin-only.
 
-router.get('/attendees', (req, res) => {
+router.get('/attendees', requireCheckinAccess, (req, res) => {
   const { search, province, checked_in, origin_type } = req.query;
   let sql = 'SELECT * FROM attendees WHERE 1=1';
   const params = [];
@@ -57,7 +70,7 @@ router.get('/attendees', (req, res) => {
   res.json(db.prepare(sql).all(...params));
 });
 
-router.post('/attendees', (req, res) => {
+router.post('/attendees', requireCheckinAccess, (req, res) => {
   const b = req.body || {};
   const fullName = (b.fullName || '').trim();
   const originType = b.originType === 'international' ? 'international' : 'province';
@@ -94,7 +107,7 @@ router.post('/attendees', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM attendees WHERE id = ?').get(result.lastInsertRowid));
 });
 
-router.post('/attendees/:id/checkin', (req, res) => {
+router.post('/attendees/:id/checkin', requireCheckinAccess, (req, res) => {
   const id = Number(req.params.id);
   const existing = db.prepare('SELECT * FROM attendees WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'Attendee not found.' });
@@ -246,7 +259,9 @@ router.delete('/duties/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- Requisitions (admin-only) ----
+// ---- Requisitions ----
+// Admins see and manage every requisition. Department admins are scoped to
+// their own division only, both for listing and for updating status.
 
 const REQUISITION_SELECT = `
   SELECT r.*, s.name AS subcommittee_name, d.id AS division_id, d.name AS division_name
@@ -255,13 +270,15 @@ const REQUISITION_SELECT = `
   JOIN divisions d ON d.id = s.division_id
 `;
 
-router.get('/requisitions', requireAdmin, (req, res) => {
-  const { status, subcommittee_id, division_id, search } = req.query;
+router.get('/requisitions', requireRequisitionAccess, (req, res) => {
+  const { status, subcommittee_id, search } = req.query;
+  const myDivisionId = scopeDivisionId(req);
   let sql = REQUISITION_SELECT + ' WHERE 1=1';
   const params = [];
   if (status) { sql += ' AND r.status = ?'; params.push(status); }
   if (subcommittee_id) { sql += ' AND r.subcommittee_id = ?'; params.push(subcommittee_id); }
-  if (division_id) { sql += ' AND d.id = ?'; params.push(division_id); }
+  if (myDivisionId) { sql += ' AND d.id = ?'; params.push(myDivisionId); }
+  else if (req.query.division_id) { sql += ' AND d.id = ?'; params.push(req.query.division_id); }
   if (search) {
     sql += ' AND (r.requestor_name LIKE ? OR r.description LIKE ? OR r.recommended_vendor LIKE ?)';
     const like = `%${search}%`;
@@ -271,10 +288,15 @@ router.get('/requisitions', requireAdmin, (req, res) => {
   res.json(db.prepare(sql).all(...params));
 });
 
-router.patch('/requisitions/:id', requireAdmin, (req, res) => {
+router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
   const id = Number(req.params.id);
-  const existing = db.prepare('SELECT * FROM requisitions WHERE id = ?').get(id);
+  const existing = db.prepare(REQUISITION_SELECT + ' WHERE r.id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'Requisition not found.' });
+
+  const myDivisionId = scopeDivisionId(req);
+  if (myDivisionId && existing.division_id !== myDivisionId) {
+    return res.status(403).json({ error: 'This requisition belongs to another division.' });
+  }
 
   const b = req.body || {};
   const fields = [];
@@ -296,8 +318,11 @@ router.patch('/requisitions/:id', requireAdmin, (req, res) => {
   res.json(db.prepare(REQUISITION_SELECT + ' WHERE r.id = ?').get(id));
 });
 
-router.get('/requisitions-export.csv', requireAdmin, (req, res) => {
-  const rows = db.prepare(REQUISITION_SELECT + ' ORDER BY r.created_at').all();
+router.get('/requisitions-export.csv', requireRequisitionAccess, (req, res) => {
+  const myDivisionId = scopeDivisionId(req);
+  const rows = myDivisionId
+    ? db.prepare(REQUISITION_SELECT + ' WHERE d.id = ? ORDER BY r.created_at').all(myDivisionId)
+    : db.prepare(REQUISITION_SELECT + ' ORDER BY r.created_at').all();
   const cols = [
     'id', 'requestor_name', 'requestor_contact', 'division_name', 'subcommittee_name',
     'description', 'recommended_vendor', 'amount_requested', 'date_required', 'priority',
@@ -380,7 +405,7 @@ router.post('/requisitions-import', requireAdmin, (req, res) => {
   res.json({ created, failed: errors.length, errors });
 });
 
-// ---- Divisions & Budget (admin-only) ----
+// ---- Divisions (admin-only — used for the staff-account division picker) ----
 
 router.get('/divisions', requireAdmin, (req, res) => {
   const divisions = db.prepare('SELECT * FROM divisions ORDER BY sort_order').all();
@@ -388,8 +413,12 @@ router.get('/divisions', requireAdmin, (req, res) => {
   res.json({ divisions, subcommittees });
 });
 
-router.get('/budget', requireAdmin, (req, res) => {
+// ---- Budget ----
+// Admins see every division. Department admins are scoped to their own.
+
+router.get('/budget', requireRequisitionAccess, (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
+  const myDivisionId = scopeDivisionId(req);
   const rows = db
     .prepare(`
       SELECT s.id AS subcommittee_id, s.name AS subcommittee_name, s.sort_order,
@@ -403,9 +432,10 @@ router.get('/budget', requireAdmin, (req, res) => {
         SELECT subcommittee_id, SUM(amount_requested) AS approved_sum
         FROM requisitions WHERE status = 'approved' GROUP BY subcommittee_id
       ) req ON req.subcommittee_id = s.id
+      WHERE (? IS NULL OR d.id = ?)
       ORDER BY s.sort_order
     `)
-    .all(year);
+    .all(year, myDivisionId, myDivisionId);
 
   const withTotals = rows.map((r) => {
     const manualDisbursed = r.manual_disbursed || 0;
@@ -428,14 +458,18 @@ router.get('/budget', requireAdmin, (req, res) => {
   res.json({ year, currentYear: CURRENT_YEAR, lines: withTotals });
 });
 
-router.post('/budget', requireAdmin, (req, res) => {
+router.post('/budget', requireRequisitionAccess, (req, res) => {
   const b = req.body || {};
   const subcommitteeId = Number(b.subcommitteeId);
   const year = Number(b.year);
   if (!subcommitteeId || !year) return res.status(400).json({ error: 'Sub-committee and year are required.' });
 
-  const sub = db.prepare('SELECT id FROM subcommittees WHERE id = ?').get(subcommitteeId);
+  const sub = db.prepare('SELECT id, division_id FROM subcommittees WHERE id = ?').get(subcommitteeId);
   if (!sub) return res.status(400).json({ error: 'Unknown sub-committee.' });
+  const myDivisionId = scopeDivisionId(req);
+  if (myDivisionId && sub.division_id !== myDivisionId) {
+    return res.status(403).json({ error: 'This sub-committee belongs to another division.' });
+  }
 
   db.prepare(`
     INSERT INTO budget_lines (subcommittee_id, year, approved_budget, manual_disbursed, manual_refunded)
@@ -454,8 +488,9 @@ router.post('/budget', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/budget-export.csv', requireAdmin, (req, res) => {
+router.get('/budget-export.csv', requireRequisitionAccess, (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
+  const myDivisionId = scopeDivisionId(req);
   const rows = db
     .prepare(`
       SELECT s.name AS subcommittee_name, d.name AS division_name, d.head_name,
@@ -468,9 +503,10 @@ router.get('/budget-export.csv', requireAdmin, (req, res) => {
         SELECT subcommittee_id, SUM(amount_requested) AS approved_sum
         FROM requisitions WHERE status = 'approved' GROUP BY subcommittee_id
       ) req ON req.subcommittee_id = s.id
+      WHERE (? IS NULL OR d.id = ?)
       ORDER BY s.sort_order
     `)
-    .all(year);
+    .all(year, myDivisionId, myDivisionId);
 
   const csvRows = rows.map((r) => {
     const manualDisbursed = r.manual_disbursed || 0;
@@ -577,10 +613,20 @@ router.get('/users', requireAdmin, (req, res) => {
 });
 
 router.post('/users', requireAdmin, (req, res) => {
-  const { username, pin, role } = req.body || {};
+  const { username, pin, role, divisionId } = req.body || {};
   try {
-    const user = createUser(username, pin, role);
+    const user = createUser(username, pin, role, divisionId);
     res.status(201).json(user);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+router.patch('/users/:id', requireAdmin, (req, res) => {
+  const { role, divisionId } = req.body || {};
+  try {
+    const user = updateUser(Number(req.params.id), { role, divisionId });
+    res.json(user);
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }

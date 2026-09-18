@@ -69,13 +69,13 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn active" data-tab="checkin">Check-In</button>
-      <button class="tab-btn admin-only" data-tab="registrations">Registrations</button>
-      <button class="tab-btn admin-only" data-tab="teams">Teams</button>
-      <button class="tab-btn admin-only" data-tab="roster">Duty roster</button>
-      <button class="tab-btn admin-only" data-tab="requisitions">Requisitions</button>
-      <button class="tab-btn admin-only" data-tab="budget">Budget</button>
-      <button class="tab-btn admin-only" data-tab="settings">Settings</button>
+      <button class="tab-btn active" data-tab="checkin" data-roles="admin,checkin">Check-In</button>
+      <button class="tab-btn" data-tab="registrations" data-roles="admin">Registrations</button>
+      <button class="tab-btn" data-tab="teams" data-roles="admin">Teams</button>
+      <button class="tab-btn" data-tab="roster" data-roles="admin">Duty roster</button>
+      <button class="tab-btn" data-tab="requisitions" data-roles="admin,department_admin">Requisitions</button>
+      <button class="tab-btn" data-tab="budget" data-roles="admin,department_admin">Budget</button>
+      <button class="tab-btn" data-tab="settings" data-roles="admin">Settings</button>
     </div>
 
     <!-- CHECK-IN -->
@@ -148,7 +148,7 @@
         </div>
         <div class="spacer"></div>
         <a class="btn btn-quiet btn-sm" href="/api/staff/requisitions-export.csv">Export CSV</a>
-        <button class="btn btn-quiet btn-sm" id="req-import-btn" type="button">Import CSV</button>
+        <button class="btn btn-quiet btn-sm super-admin-only" id="req-import-btn" type="button">Import CSV</button>
         <input type="file" id="req-import-file" accept=".csv" style="display:none;">
       </div>
       <div class="table-wrap">
@@ -168,7 +168,7 @@
         </div>
         <div class="spacer"></div>
         <a class="btn btn-quiet btn-sm" id="budget-export-link" href="/api/staff/budget-export.csv?year=2026">Export CSV</a>
-        <button class="btn btn-quiet btn-sm" id="budget-import-btn" type="button">Import CSV</button>
+        <button class="btn btn-quiet btn-sm super-admin-only" id="budget-import-btn" type="button">Import CSV</button>
         <input type="file" id="budget-import-file" accept=".csv" style="display:none;">
       </div>
       <div id="budget-content"><p class="empty-state">Loading…</p></div>
@@ -191,7 +191,7 @@
         </div>
         <div class="card">
           <h3>Staff accounts</h3>
-          <p style="font-size:0.85rem;">Admins can manage teams, the roster and settings. Check-in accounts only see the Check-In tab.</p>
+          <p style="font-size:0.85rem;">Super admins manage everything. Department admins only see Requisitions &amp; Budget for their own division. Check-in accounts only see Check-In.</p>
           <div id="users-list" style="margin-bottom:16px;"><p class="empty-state">Loading…</p></div>
           <button class="btn btn-primary btn-sm" id="add-user-btn" type="button">+ Add staff account</button>
         </div>
@@ -282,12 +282,40 @@
         <label>Access level *</label>
         <div class="radio-row">
           <label><input type="radio" name="role" value="checkin" checked> Check-in only</label>
-          <label><input type="radio" name="role" value="admin"> Admin (full access)</label>
+          <label><input type="radio" name="role" value="department_admin"> Department admin</label>
+          <label><input type="radio" name="role" value="admin"> Super admin (full access)</label>
         </div>
+      </div>
+      <div class="field" id="u-division-field" style="display:none;">
+        <label for="u-division">Division *</label>
+        <select id="u-division" name="divisionId"></select>
       </div>
       <div class="dialog-actions">
         <button type="button" class="btn btn-quiet" id="user-cancel">Cancel</button>
         <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Edit user (permissions) dialog -->
+  <dialog id="edit-user-dialog">
+    <form class="dialog-inner" id="edit-user-form" method="dialog">
+      <h3 id="edit-user-title">Edit account</h3>
+      <div class="field">
+        <label>Access level *</label>
+        <div class="radio-row">
+          <label><input type="radio" name="role" value="checkin"> Check-in only</label>
+          <label><input type="radio" name="role" value="department_admin"> Department admin</label>
+          <label><input type="radio" name="role" value="admin"> Super admin (full access)</label>
+        </div>
+      </div>
+      <div class="field" id="eu-division-field" style="display:none;">
+        <label for="eu-division">Division *</label>
+        <select id="eu-division" name="divisionId"></select>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-quiet" id="edit-user-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
       </div>
     </form>
   </dialog>

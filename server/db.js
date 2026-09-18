@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
   pin_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin','checkin')),
+  role TEXT NOT NULL CHECK (role IN ('admin','department_admin','checkin')),
+  division_id INTEGER REFERENCES divisions(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -118,6 +119,26 @@ CREATE INDEX IF NOT EXISTS idx_budget_lines_year ON budget_lines(year);
 CREATE INDEX IF NOT EXISTS idx_requisitions_status ON requisitions(status);
 CREATE INDEX IF NOT EXISTS idx_requisitions_subcommittee ON requisitions(subcommittee_id);
 `);
+
+// Migrate older `users` tables (created before department_admin/division_id
+// existed) by rebuilding the table with the new schema and copying rows over.
+const userCols = db.prepare('PRAGMA table_info(users)').all();
+if (!userCols.some((c) => c.name === 'division_id')) {
+  db.exec(`
+    ALTER TABLE users RENAME TO users_old_migrate;
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      pin_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin','department_admin','checkin')),
+      division_id INTEGER REFERENCES divisions(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO users (id, username, pin_hash, role, created_at)
+      SELECT id, username, pin_hash, role, created_at FROM users_old_migrate;
+    DROP TABLE users_old_migrate;
+  `);
+}
 
 function getSetting(key, fallback) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
