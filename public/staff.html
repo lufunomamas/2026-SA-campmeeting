@@ -73,6 +73,8 @@
       <button class="tab-btn admin-only" data-tab="registrations">Registrations</button>
       <button class="tab-btn admin-only" data-tab="teams">Teams</button>
       <button class="tab-btn admin-only" data-tab="roster">Duty roster</button>
+      <button class="tab-btn admin-only" data-tab="requisitions">Requisitions</button>
+      <button class="tab-btn admin-only" data-tab="budget">Budget</button>
       <button class="tab-btn admin-only" data-tab="settings">Settings</button>
     </div>
 
@@ -131,6 +133,45 @@
           <tbody id="duty-rows"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- REQUISITIONS -->
+    <section class="tab-panel" id="tab-requisitions">
+      <div class="toolbar">
+        <input type="search" id="req-search" placeholder="Search requestor, description, vendor…" style="min-width:220px;">
+        <div class="pill-select" id="req-status-filter">
+          <button data-status="" class="active">All</button>
+          <button data-status="pending">Pending</button>
+          <button data-status="review">Review</button>
+          <button data-status="approved">Approved</button>
+          <button data-status="declined">Declined</button>
+        </div>
+        <div class="spacer"></div>
+        <a class="btn btn-quiet btn-sm" href="/api/staff/requisitions-export.csv">Export CSV</a>
+        <button class="btn btn-quiet btn-sm" id="req-import-btn" type="button">Import CSV</button>
+        <input type="file" id="req-import-file" accept=".csv" style="display:none;">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Requestor</th><th>Department</th><th>Description</th><th class="num">Amount</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+          <tbody id="req-rows"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- BUDGET -->
+    <section class="tab-panel" id="tab-budget">
+      <div class="toolbar">
+        <div class="pill-select" id="budget-year-filter">
+          <button data-year="2026" class="active">2026</button>
+          <button data-year="2025">2025 (historical)</button>
+        </div>
+        <div class="spacer"></div>
+        <a class="btn btn-quiet btn-sm" id="budget-export-link" href="/api/staff/budget-export.csv?year=2026">Export CSV</a>
+        <button class="btn btn-quiet btn-sm" id="budget-import-btn" type="button">Import CSV</button>
+        <input type="file" id="budget-import-file" accept=".csv" style="display:none;">
+      </div>
+      <div id="budget-content"><p class="empty-state">Loading…</p></div>
     </section>
 
     <!-- SETTINGS -->
@@ -249,6 +290,60 @@
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Requisition review dialog -->
+  <dialog id="req-dialog">
+    <div class="dialog-inner">
+      <h3 style="margin-bottom:4px;">Requisition <span id="rq-id"></span></h3>
+      <p class="hint" id="rq-submitted" style="margin-bottom:16px;"></p>
+      <div id="rq-details" style="display:flex; flex-direction:column; gap:10px; margin-bottom:18px;"></div>
+      <div class="field">
+        <label for="rq-status">Status</label>
+        <select id="rq-status">
+          <option value="pending">Pending</option>
+          <option value="review">Under review</option>
+          <option value="approved">Approved</option>
+          <option value="declined">Declined</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="rq-notes">Reviewer notes</label>
+        <textarea id="rq-notes" placeholder="Optional — visible to other admins"></textarea>
+      </div>
+      <div class="dialog-actions" style="flex-wrap:wrap;">
+        <a class="btn btn-quiet" id="rq-whatsapp-link" target="_blank" rel="noopener">Notify requester on WhatsApp</a>
+        <div class="spacer"></div>
+        <button type="button" class="btn btn-quiet" id="rq-cancel">Close</button>
+        <button type="button" class="btn btn-primary" id="rq-save">Save status</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Budget line dialog -->
+  <dialog id="budget-dialog">
+    <form class="dialog-inner" id="budget-form" method="dialog">
+      <h3 id="budget-dialog-title">Edit budget line</h3>
+      <div class="field"><label for="bg-approved">Approved budget (R)</label><input id="bg-approved" type="number" step="0.01" min="0"></div>
+      <div class="field"><label for="bg-disbursed">Other disbursed, outside requisitions (R)</label><input id="bg-disbursed" type="number" step="0.01" min="0"></div>
+      <div class="field"><label for="bg-refunded">Refunded (R)</label><input id="bg-refunded" type="number" step="0.01" min="0"></div>
+      <p class="hint">Funds disbursed via approved requisitions are added automatically — no need to enter them here.</p>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-quiet" id="budget-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- CSV import results dialog -->
+  <dialog id="import-result-dialog">
+    <div class="dialog-inner">
+      <h3 id="import-result-title">Import results</h3>
+      <div id="import-result-body"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-primary" id="import-result-close">Done</button>
+      </div>
+    </div>
   </dialog>
 
   <!-- Reset PIN dialog -->

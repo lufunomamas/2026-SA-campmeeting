@@ -3,6 +3,7 @@ function renderNav(active) {
     ['/', 'Home'],
     ['/register.html', 'Register'],
     ['/roster.html', 'Duty Roster'],
+    ['/requisition.html', 'Requisition'],
     ['/staff.html', 'Staff'],
   ];
   const el = document.getElementById('site-nav');
@@ -72,6 +73,27 @@ function toast(msg, isError) {
   t.classList.add('show');
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+/** Normalizes a South African-style number to international digits-only
+ * form for a wa.me link (leading 0 -> 27, strips spaces/dashes/+). */
+function waDigits(phone) {
+  let d = String(phone || '').replace(/[^\d]/g, '');
+  if (d.startsWith('0')) d = '27' + d.slice(1);
+  return d;
+}
+
+function waLink(phone, message) {
+  return `https://wa.me/${waDigits(phone)}?text=${encodeURIComponent(message)}`;
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 async function api(path, options = {}) {

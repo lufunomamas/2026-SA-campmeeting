@@ -1,6 +1,8 @@
 const express = require('express');
 const { db, getSetting, setSetting } = require('./db');
-const { SA_PROVINCES } = require('./constants');
+const { SA_PROVINCES, REQUISITION_PRIORITIES, PAYMENT_METHODS, REQUISITION_STATUSES } = require('./constants');
+const { toCsv, parseCsv } = require('./csv');
+const { CURRENT_YEAR } = require('./budget_seed');
 const {
   verifyLogin,
   createUser,
@@ -242,6 +244,311 @@ router.patch('/duties/:id', requireAdmin, (req, res) => {
 router.delete('/duties/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM duties WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
+});
+
+// ---- Requisitions (admin-only) ----
+
+const REQUISITION_SELECT = `
+  SELECT r.*, s.name AS subcommittee_name, d.id AS division_id, d.name AS division_name
+  FROM requisitions r
+  JOIN subcommittees s ON s.id = r.subcommittee_id
+  JOIN divisions d ON d.id = s.division_id
+`;
+
+router.get('/requisitions', requireAdmin, (req, res) => {
+  const { status, subcommittee_id, division_id, search } = req.query;
+  let sql = REQUISITION_SELECT + ' WHERE 1=1';
+  const params = [];
+  if (status) { sql += ' AND r.status = ?'; params.push(status); }
+  if (subcommittee_id) { sql += ' AND r.subcommittee_id = ?'; params.push(subcommittee_id); }
+  if (division_id) { sql += ' AND d.id = ?'; params.push(division_id); }
+  if (search) {
+    sql += ' AND (r.requestor_name LIKE ? OR r.description LIKE ? OR r.recommended_vendor LIKE ?)';
+    const like = `%${search}%`;
+    params.push(like, like, like);
+  }
+  sql += ' ORDER BY r.created_at DESC';
+  res.json(db.prepare(sql).all(...params));
+});
+
+router.patch('/requisitions/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare('SELECT * FROM requisitions WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Requisition not found.' });
+
+  const b = req.body || {};
+  const fields = [];
+  const params = [];
+  if (b.status !== undefined) {
+    if (!REQUISITION_STATUSES.includes(b.status)) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
+    fields.push('status = ?', 'reviewed_by = ?', 'reviewed_at = ?');
+    params.push(b.status, req.session.username, new Date().toISOString());
+  }
+  if (b.reviewerNotes !== undefined) {
+    fields.push('reviewer_notes = ?');
+    params.push(String(b.reviewerNotes).trim() || null);
+  }
+  if (!fields.length) return res.json(existing);
+  params.push(id);
+  db.prepare(`UPDATE requisitions SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+  res.json(db.prepare(REQUISITION_SELECT + ' WHERE r.id = ?').get(id));
+});
+
+router.get('/requisitions-export.csv', requireAdmin, (req, res) => {
+  const rows = db.prepare(REQUISITION_SELECT + ' ORDER BY r.created_at').all();
+  const cols = [
+    'id', 'requestor_name', 'requestor_contact', 'division_name', 'subcommittee_name',
+    'description', 'recommended_vendor', 'amount_requested', 'date_required', 'priority',
+    'payment_method', 'banking_details', 'payment_reference', 'proof_of_payment_email',
+    'status', 'reviewer_notes', 'reviewed_by', 'reviewed_at', 'created_at',
+  ];
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="requisitions.csv"');
+  res.send(toCsv(rows, cols));
+});
+
+router.post('/requisitions-import', requireAdmin, (req, res) => {
+  const csvText = (req.body || {}).csv;
+  if (!csvText || typeof csvText !== 'string') return res.status(400).json({ error: 'No CSV text provided.' });
+
+  const subs = db.prepare('SELECT id, name FROM subcommittees').all();
+  const subByName = new Map(subs.map((s) => [s.name.trim().toLowerCase(), s.id]));
+
+  let records;
+  try {
+    records = parseCsv(csvText);
+  } catch (e) {
+    return res.status(400).json({ error: 'Could not parse CSV.' });
+  }
+
+  const insert = db.prepare(`
+    INSERT INTO requisitions
+      (requestor_name, requestor_contact, subcommittee_id, description, recommended_vendor,
+       amount_requested, date_required, priority, payment_method, banking_details,
+       payment_reference, proof_of_payment_email, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  let created = 0;
+  const errors = [];
+  records.forEach((rec, idx) => {
+    const rowNum = idx + 2; // account for header row, 1-indexed
+    const get = (...keys) => {
+      for (const k of keys) {
+        if (rec[k] !== undefined && rec[k] !== '') return rec[k];
+      }
+      return '';
+    };
+    const requestorName = get('requestor_name', 'requestorName', 'Name of Requestor');
+    const requestorContact = get('requestor_contact', 'requestorContact', 'Contact Number of Requestor');
+    const deptName = get('subcommittee_name', 'department', 'Department');
+    const description = get('description', 'Description of Request');
+    const amount = parseFloat(get('amount_requested', 'amountRequested', 'Amount Requested'));
+    const paymentMethodRaw = get('payment_method', 'paymentMethod', 'Cash or Bank?');
+    const paymentMethod = PAYMENT_METHODS.find((m) => m.toLowerCase() === String(paymentMethodRaw).toLowerCase());
+    const priorityRaw = get('priority', 'Priority') || '3';
+    const priority = REQUISITION_PRIORITIES.includes(priorityRaw) ? priorityRaw : '3';
+    const subId = subByName.get(String(deptName).trim().toLowerCase());
+    const statusRaw = (get('status', 'Status') || 'pending').toLowerCase();
+    const status = REQUISITION_STATUSES.includes(statusRaw) ? statusRaw : 'pending';
+
+    if (!requestorName || !requestorContact || !description || !subId || !(amount > 0) || !paymentMethod) {
+      errors.push(`Row ${rowNum}: missing or invalid required field(s) (name, contact, department, description, amount, payment method).`);
+      return;
+    }
+
+    insert.run(
+      requestorName,
+      requestorContact,
+      subId,
+      description,
+      get('recommended_vendor', 'recommendedVendor', 'Recommended Vendor') || null,
+      amount,
+      get('date_required', 'dateRequired', 'Date Fund is Required') || null,
+      priority,
+      paymentMethod,
+      get('banking_details', 'bankingDetails', 'Banking Details if Applicable') || null,
+      get('payment_reference', 'paymentReference', 'Payment Reference if Applicable') || null,
+      get('proof_of_payment_email', 'proofOfPaymentEmail', 'Proof of Payment Email Address if Needed') || null,
+      status
+    );
+    created += 1;
+  });
+
+  res.json({ created, failed: errors.length, errors });
+});
+
+// ---- Divisions & Budget (admin-only) ----
+
+router.get('/divisions', requireAdmin, (req, res) => {
+  const divisions = db.prepare('SELECT * FROM divisions ORDER BY sort_order').all();
+  const subcommittees = db.prepare('SELECT * FROM subcommittees ORDER BY sort_order').all();
+  res.json({ divisions, subcommittees });
+});
+
+router.get('/budget', requireAdmin, (req, res) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const rows = db
+    .prepare(`
+      SELECT s.id AS subcommittee_id, s.name AS subcommittee_name, s.sort_order,
+             d.id AS division_id, d.name AS division_name, d.head_name,
+             bl.approved_budget, bl.manual_disbursed, bl.manual_refunded,
+             COALESCE(req.approved_sum, 0) AS requisition_disbursed
+      FROM subcommittees s
+      JOIN divisions d ON d.id = s.division_id
+      LEFT JOIN budget_lines bl ON bl.subcommittee_id = s.id AND bl.year = ?
+      LEFT JOIN (
+        SELECT subcommittee_id, SUM(amount_requested) AS approved_sum
+        FROM requisitions WHERE status = 'approved' GROUP BY subcommittee_id
+      ) req ON req.subcommittee_id = s.id
+      ORDER BY s.sort_order
+    `)
+    .all(year);
+
+  const withTotals = rows.map((r) => {
+    const manualDisbursed = r.manual_disbursed || 0;
+    const requisitionDisbursed = year === CURRENT_YEAR ? r.requisition_disbursed || 0 : 0;
+    const actualDisbursed = manualDisbursed + requisitionDisbursed;
+    const refunded = r.manual_refunded || 0;
+    const net = actualDisbursed - refunded;
+    const approvedBudget = r.approved_budget || 0;
+    return {
+      ...r,
+      approved_budget: approvedBudget,
+      actual_disbursed: actualDisbursed,
+      requisition_disbursed: requisitionDisbursed,
+      refunded,
+      net,
+      over_under: approvedBudget - net,
+    };
+  });
+
+  res.json({ year, currentYear: CURRENT_YEAR, lines: withTotals });
+});
+
+router.post('/budget', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  const subcommitteeId = Number(b.subcommitteeId);
+  const year = Number(b.year);
+  if (!subcommitteeId || !year) return res.status(400).json({ error: 'Sub-committee and year are required.' });
+
+  const sub = db.prepare('SELECT id FROM subcommittees WHERE id = ?').get(subcommitteeId);
+  if (!sub) return res.status(400).json({ error: 'Unknown sub-committee.' });
+
+  db.prepare(`
+    INSERT INTO budget_lines (subcommittee_id, year, approved_budget, manual_disbursed, manual_refunded)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(subcommittee_id, year) DO UPDATE SET
+      approved_budget = excluded.approved_budget,
+      manual_disbursed = excluded.manual_disbursed,
+      manual_refunded = excluded.manual_refunded
+  `).run(
+    subcommitteeId,
+    year,
+    parseFloat(b.approvedBudget) || 0,
+    parseFloat(b.manualDisbursed) || 0,
+    parseFloat(b.manualRefunded) || 0
+  );
+  res.json({ ok: true });
+});
+
+router.get('/budget-export.csv', requireAdmin, (req, res) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const rows = db
+    .prepare(`
+      SELECT s.name AS subcommittee_name, d.name AS division_name, d.head_name,
+             bl.approved_budget, bl.manual_disbursed, bl.manual_refunded,
+             COALESCE(req.approved_sum, 0) AS requisition_disbursed
+      FROM subcommittees s
+      JOIN divisions d ON d.id = s.division_id
+      LEFT JOIN budget_lines bl ON bl.subcommittee_id = s.id AND bl.year = ?
+      LEFT JOIN (
+        SELECT subcommittee_id, SUM(amount_requested) AS approved_sum
+        FROM requisitions WHERE status = 'approved' GROUP BY subcommittee_id
+      ) req ON req.subcommittee_id = s.id
+      ORDER BY s.sort_order
+    `)
+    .all(year);
+
+  const csvRows = rows.map((r) => {
+    const manualDisbursed = r.manual_disbursed || 0;
+    const requisitionDisbursed = year === CURRENT_YEAR ? r.requisition_disbursed || 0 : 0;
+    const actualDisbursed = manualDisbursed + requisitionDisbursed;
+    const refunded = r.manual_refunded || 0;
+    const net = actualDisbursed - refunded;
+    const approvedBudget = r.approved_budget || 0;
+    return {
+      Division: r.division_name,
+      Head: r.head_name,
+      'Sub-Committee': r.subcommittee_name,
+      'Approved Budget': approvedBudget.toFixed(2),
+      'Actual Disbursed': actualDisbursed.toFixed(2),
+      Refunded: refunded.toFixed(2),
+      Net: net.toFixed(2),
+      'Over/Under Spending': (approvedBudget - net).toFixed(2),
+    };
+  });
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="budget-${year}.csv"`);
+  res.send(toCsv(csvRows, ['Division', 'Head', 'Sub-Committee', 'Approved Budget', 'Actual Disbursed', 'Refunded', 'Net', 'Over/Under Spending']));
+});
+
+router.post('/budget-import', requireAdmin, (req, res) => {
+  const { csv: csvText, year } = req.body || {};
+  const targetYear = Number(year) || new Date().getFullYear();
+  if (!csvText || typeof csvText !== 'string') return res.status(400).json({ error: 'No CSV text provided.' });
+
+  const subs = db.prepare('SELECT id, name FROM subcommittees').all();
+  const subByName = new Map(subs.map((s) => [s.name.trim().toLowerCase(), s.id]));
+
+  let records;
+  try {
+    records = parseCsv(csvText);
+  } catch (e) {
+    return res.status(400).json({ error: 'Could not parse CSV.' });
+  }
+
+  const upsert = db.prepare(`
+    INSERT INTO budget_lines (subcommittee_id, year, approved_budget, manual_disbursed, manual_refunded)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(subcommittee_id, year) DO UPDATE SET
+      approved_budget = excluded.approved_budget,
+      manual_disbursed = excluded.manual_disbursed,
+      manual_refunded = excluded.manual_refunded
+  `);
+
+  let updated = 0;
+  const errors = [];
+  const parseMoney = (v) => parseFloat(String(v || '0').replace(/[^0-9.-]/g, '')) || 0;
+
+  records.forEach((rec, idx) => {
+    const rowNum = idx + 2;
+    const get = (...keys) => {
+      for (const k of keys) {
+        if (rec[k] !== undefined && rec[k] !== '') return rec[k];
+      }
+      return '';
+    };
+    const subName = get('Sub-Committee', 'subcommittee_name', 'subcommittee');
+    const subId = subByName.get(String(subName).trim().toLowerCase());
+    if (!subId) {
+      errors.push(`Row ${rowNum}: unrecognized Sub-Committee "${subName}".`);
+      return;
+    }
+    upsert.run(
+      subId,
+      targetYear,
+      parseMoney(get('Approved Budget', 'approved_budget')),
+      parseMoney(get('Actual Disbursed', 'manual_disbursed', 'Disbursed')),
+      parseMoney(get('Refunded', 'manual_refunded'))
+    );
+    updated += 1;
+  });
+
+  res.json({ updated, failed: errors.length, errors, year: targetYear });
 });
 
 // ---- Settings (admin-only) ----

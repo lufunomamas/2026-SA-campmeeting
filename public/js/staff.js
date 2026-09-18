@@ -40,6 +40,15 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 
 // ---- Tabs ----
 let appInited = false;
+const TAB_REFRESH = {
+  checkin: () => loadCheckin(),
+  registrations: () => loadRegistrations(),
+  teams: () => loadTeams(),
+  roster: () => loadDuties(),
+  requisitions: () => loadRequisitions(),
+  budget: () => loadBudget(),
+};
+
 function initApp() {
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -47,6 +56,8 @@ function initApp() {
       document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+      const refresh = TAB_REFRESH[btn.dataset.tab];
+      if (refresh && appInited) refresh();
     });
   });
 
@@ -73,6 +84,8 @@ function initApp() {
   wireDutyDialog();
   wireSettings();
   wireUserDialogs();
+  wireRequisitions();
+  wireBudget();
 
   document.getElementById('reg-search').addEventListener('input', debounce(loadRegistrations, 250));
   document.getElementById('reg-province-filter').addEventListener('change', loadRegistrations);
@@ -82,6 +95,10 @@ function initApp() {
     loadDuties();
   });
   loadUsers();
+  loadSubcommitteesCache().then(() => {
+    loadRequisitions();
+    loadBudget();
+  });
 }
 
 function debounce(fn, ms) {
@@ -541,6 +558,307 @@ function openResetPinDialog(id, username) {
   document.getElementById('reset-pin-title').textContent = `Reset PIN for ${username}`;
   document.getElementById('reset-pin-form').reset();
   dialog.showModal();
+}
+
+// ---- Requisitions & Budget shared ----
+let subcommitteesCache = [];
+
+async function loadSubcommitteesCache() {
+  const { subcommittees } = await api('/api/subcommittees');
+  subcommitteesCache = subcommittees;
+}
+
+function fmtMoney(n) {
+  return 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+function showImportResult(title, result) {
+  document.getElementById('import-result-title').textContent = title;
+  const created = result.created ?? result.updated ?? 0;
+  const label = result.created !== undefined ? 'created' : 'updated';
+  document.getElementById('import-result-body').innerHTML = `
+    <p><strong>${created}</strong> row(s) ${label}. <strong>${result.failed || 0}</strong> failed.</p>
+    ${result.errors && result.errors.length ? `<div class="alert alert-error" style="max-height:200px; overflow-y:auto;">${result.errors.map((e) => `<div>${e}</div>`).join('')}</div>` : ''}
+  `;
+  document.getElementById('import-result-dialog').showModal();
+}
+
+document.getElementById('import-result-close').addEventListener('click', () => {
+  document.getElementById('import-result-dialog').close();
+});
+
+// ---- Requisitions ----
+let reqStatusFilter = '';
+
+async function loadRequisitions() {
+  const tbody = document.getElementById('req-rows');
+  const params = new URLSearchParams();
+  const search = document.getElementById('req-search').value;
+  if (reqStatusFilter) params.set('status', reqStatusFilter);
+  if (search) params.set('search', search);
+  try {
+    const rows = await api(`/api/staff/requisitions?${params.toString()}`);
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No requisitions found.</td></tr>';
+      return;
+    }
+    const statusBadge = { pending: 'badge', review: 'badge badge-gold', approved: 'badge badge-green', declined: 'badge badge-brick' };
+    const statusLabel = { pending: 'Pending', review: 'Review', approved: 'Approved', declined: 'Declined' };
+    tbody.innerHTML = rows
+      .map(
+        (r) => `
+        <tr>
+          <td>${fmtDate(r.date_required) || fmtDate(r.created_at.slice(0, 10))}</td>
+          <td>${r.requestor_name}</td>
+          <td>${r.subcommittee_name}</td>
+          <td>${r.description.length > 50 ? r.description.slice(0, 50) + '…' : r.description}</td>
+          <td class="num">${fmtMoney(r.amount_requested)}</td>
+          <td>${r.priority}</td>
+          <td><span class="${statusBadge[r.status]}">${statusLabel[r.status]}</span></td>
+          <td><button class="btn btn-sm btn-quiet review-req-btn" data-id="${r.id}">Review</button></td>
+        </tr>`
+      )
+      .join('');
+    tbody.querySelectorAll('.review-req-btn').forEach((btn) =>
+      btn.addEventListener('click', () => openRequisitionDialog(rows.find((r) => r.id == btn.dataset.id)))
+    );
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Could not load requisitions.</td></tr>';
+  }
+}
+
+function openRequisitionDialog(r) {
+  const dialog = document.getElementById('req-dialog');
+  dialog.dataset.id = r.id;
+  dialog.dataset.contact = r.requestor_contact;
+  document.getElementById('rq-id').textContent = `#${r.id} — ${r.division_name} / ${r.subcommittee_name}`;
+  document.getElementById('rq-submitted').textContent = `Submitted ${fmtDate(r.created_at.slice(0, 10))} by ${r.requestor_name} (${r.requestor_contact})`;
+
+  const rows = [
+    ['Description', r.description],
+    ['Recommended vendor', r.recommended_vendor || '—'],
+    ['Amount requested', fmtMoney(r.amount_requested)],
+    ['Date fund required', fmtDate(r.date_required) || '—'],
+    ['Priority', r.priority],
+    ['Cash or bank', r.payment_method],
+    ['Banking details', r.banking_details || '—'],
+    ['Payment reference', r.payment_reference || '—'],
+    ['Proof of payment email', r.proof_of_payment_email || '—'],
+  ];
+  document.getElementById('rq-details').innerHTML = rows
+    .map(([label, value]) => `<div><div class="field-label-inline">${label}</div><div>${value}</div></div>`)
+    .join('');
+
+  document.getElementById('rq-status').value = r.status;
+  document.getElementById('rq-notes').value = r.reviewer_notes || '';
+
+  const statusMessage = {
+    pending: 'is still pending review',
+    review: 'is under review — we may follow up with questions',
+    approved: 'has been APPROVED',
+    declined: 'has been DECLINED',
+  };
+  const message =
+    `Hi ${r.requestor_name}, your requisition for ${r.subcommittee_name} (${fmtMoney(r.amount_requested)}) ${statusMessage[r.status]}.` +
+    (r.reviewer_notes ? `\n\nNote: ${r.reviewer_notes}` : '');
+  document.getElementById('rq-whatsapp-link').href = waLink(r.requestor_contact, message);
+
+  dialog.showModal();
+}
+
+function wireRequisitions() {
+  const dialog = document.getElementById('req-dialog');
+  document.getElementById('rq-cancel').addEventListener('click', () => dialog.close());
+  document.getElementById('rq-save').addEventListener('click', async () => {
+    const id = dialog.dataset.id;
+    const status = document.getElementById('rq-status').value;
+    const reviewerNotes = document.getElementById('rq-notes').value;
+    try {
+      await api(`/api/staff/requisitions/${id}`, { method: 'PATCH', body: { status, reviewerNotes } });
+      toast('Requisition updated');
+      dialog.close();
+      loadRequisitions();
+      loadBudget();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  document.getElementById('req-search').addEventListener('input', debounce(loadRequisitions, 250));
+  document.querySelectorAll('#req-status-filter button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#req-status-filter button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      reqStatusFilter = btn.dataset.status;
+      loadRequisitions();
+    });
+  });
+
+  const fileInput = document.getElementById('req-import-file');
+  document.getElementById('req-import-btn').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    try {
+      const csv = await readFileAsText(file);
+      const result = await api('/api/staff/requisitions-import', { method: 'POST', body: { csv } });
+      showImportResult('Requisitions import', result);
+      loadRequisitions();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      fileInput.value = '';
+    }
+  });
+}
+
+// ---- Budget ----
+let budgetYear = 2026;
+
+async function loadBudget() {
+  const el = document.getElementById('budget-content');
+  try {
+    const { lines } = await api(`/api/staff/budget?year=${budgetYear}`);
+    const byDivision = {};
+    lines.forEach((l) => (byDivision[l.division_name] = byDivision[l.division_name] || []).push(l));
+
+    const grand = { approved: 0, disbursed: 0, refunded: 0, net: 0, overUnder: 0 };
+
+    el.innerHTML = Object.entries(byDivision)
+      .map(([division, rows]) => {
+        const headName = rows[0].head_name || '';
+        const sub = { approved: 0, disbursed: 0, refunded: 0, net: 0, overUnder: 0 };
+        const rowsHtml = rows
+          .map((r) => {
+            sub.approved += r.approved_budget;
+            sub.disbursed += r.actual_disbursed;
+            sub.refunded += r.refunded;
+            sub.net += r.net;
+            sub.overUnder += r.over_under;
+            const overUnderClass = r.over_under < 0 ? 'amount-negative' : 'amount-positive';
+            return `
+            <div class="budget-row">
+              <div>${r.subcommittee_name}</div>
+              <div class="num"><span class="budget-col-label">Approved</span>${fmtMoney(r.approved_budget)}</div>
+              <div class="num"><span class="budget-col-label">Disbursed</span>${fmtMoney(r.actual_disbursed)}</div>
+              <div class="num"><span class="budget-col-label">Refunded</span>${fmtMoney(r.refunded)}</div>
+              <div class="num ${overUnderClass}"><span class="budget-col-label">Over/Under</span>${fmtMoney(r.over_under)}</div>
+              <div><button class="btn btn-sm btn-quiet edit-budget-btn" data-id="${r.subcommittee_id}">Edit</button></div>
+            </div>`;
+          })
+          .join('');
+        grand.approved += sub.approved;
+        grand.disbursed += sub.disbursed;
+        grand.refunded += sub.refunded;
+        grand.net += sub.net;
+        grand.overUnder += sub.overUnder;
+        return `
+        <div class="budget-division">
+          <div class="budget-division-head">
+            <h4>${division}</h4>
+            <span class="head-name">${headName}</span>
+          </div>
+          ${rowsHtml}
+          <div class="budget-row totals">
+            <div>Subtotal</div>
+            <div class="num">${fmtMoney(sub.approved)}</div>
+            <div class="num">${fmtMoney(sub.disbursed)}</div>
+            <div class="num">${fmtMoney(sub.refunded)}</div>
+            <div class="num ${sub.overUnder < 0 ? 'amount-negative' : 'amount-positive'}">${fmtMoney(sub.overUnder)}</div>
+            <div></div>
+          </div>
+        </div>`;
+      })
+      .join('') +
+      `<div class="budget-grand-total">
+        <div>Grand total</div>
+        <div class="num">${fmtMoney(grand.approved)}</div>
+        <div class="num">${fmtMoney(grand.disbursed)}</div>
+        <div class="num">${fmtMoney(grand.refunded)}</div>
+        <div class="num">${fmtMoney(grand.overUnder)}</div>
+        <div></div>
+      </div>`;
+
+    el.querySelectorAll('.edit-budget-btn').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const line = lines.find((l) => l.subcommittee_id == btn.dataset.id);
+        openBudgetDialog(line);
+      })
+    );
+  } catch (e) {
+    el.innerHTML = '<p class="empty-state">Could not load the budget.</p>';
+  }
+}
+
+function openBudgetDialog(line) {
+  const dialog = document.getElementById('budget-dialog');
+  dialog.dataset.subcommitteeId = line.subcommittee_id;
+  document.getElementById('budget-dialog-title').textContent = `Edit ${line.subcommittee_name} — ${budgetYear}`;
+  document.getElementById('bg-approved').value = line.approved_budget;
+  document.getElementById('bg-disbursed').value = line.manual_disbursed;
+  document.getElementById('bg-refunded').value = line.manual_refunded;
+  dialog.showModal();
+}
+
+function wireBudget() {
+  const dialog = document.getElementById('budget-dialog');
+  document.getElementById('budget-cancel').addEventListener('click', () => dialog.close());
+  document.getElementById('budget-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/api/staff/budget', {
+        method: 'POST',
+        body: {
+          subcommitteeId: dialog.dataset.subcommitteeId,
+          year: budgetYear,
+          approvedBudget: document.getElementById('bg-approved').value,
+          manualDisbursed: document.getElementById('bg-disbursed').value,
+          manualRefunded: document.getElementById('bg-refunded').value,
+        },
+      });
+      toast('Budget line updated');
+      dialog.close();
+      loadBudget();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  document.querySelectorAll('#budget-year-filter button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#budget-year-filter button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      budgetYear = Number(btn.dataset.year);
+      document.getElementById('budget-export-link').href = `/api/staff/budget-export.csv?year=${budgetYear}`;
+      loadBudget();
+    });
+  });
+
+  const fileInput = document.getElementById('budget-import-file');
+  document.getElementById('budget-import-btn').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    try {
+      const csv = await readFileAsText(file);
+      const result = await api('/api/staff/budget-import', { method: 'POST', body: { csv, year: budgetYear } });
+      showImportResult(`Budget import — ${budgetYear}`, result);
+      loadBudget();
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      fileInput.value = '';
+    }
+  });
 }
 
 checkSession();

@@ -480,6 +480,7 @@ legend {
 .badge-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .badge-green { background: var(--green-soft); color: var(--green-deep); border-color: var(--green); }
 .badge-gold { background: var(--gold-soft); color: var(--gold-deep); border-color: var(--gold); }
+.badge-brick { background: var(--brick-soft); color: var(--brick); border-color: var(--brick); }
 
 /* ============ Tables ============ */
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
@@ -603,6 +604,74 @@ td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 .pill-select button.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
 .row-actions { display: flex; gap: 8px; }
+
+.field-label-inline {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+
+/* ============ Budget ============ */
+.budget-division {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.budget-division-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--paper-deep);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.budget-division-head h4 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; }
+.budget-division-head .head-name { font-size: 0.78rem; color: var(--ink-faint); }
+.budget-row {
+  display: grid;
+  grid-template-columns: 1.6fr repeat(4, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 0.86rem;
+}
+.budget-row:last-child { border-bottom: none; }
+.budget-row.totals { font-weight: 700; background: var(--paper-deep); }
+.budget-row .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.budget-row .amount-negative { color: var(--brick); }
+.budget-row .amount-positive { color: var(--green-deep); }
+.budget-col-label {
+  display: none;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.budget-grand-total {
+  display: grid;
+  grid-template-columns: 1.6fr repeat(4, 1fr) auto;
+  gap: 10px;
+  padding: 14px 18px;
+  font-weight: 700;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 14px;
+}
+.budget-grand-total .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+@media (max-width: 760px) {
+  .budget-row, .budget-grand-total { grid-template-columns: 1fr; gap: 4px; padding: 14px 18px; }
+  .budget-row .num, .budget-grand-total .num { text-align: left; }
+  .budget-col-label { display: inline; }
+  .budget-row > div, .budget-grand-total > div { display: flex; justify-content: space-between; gap: 8px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

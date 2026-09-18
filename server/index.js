@@ -6,8 +6,10 @@ const session = require('express-session');
 const { ensureDefaultAdminSeeded, DEFAULT_USERNAME, DEFAULT_PIN } = require('./auth');
 const { setSetting, getSetting } = require('./db');
 const { EVENT_DEFAULTS } = require('./constants');
+const { ensureBudgetSeeded } = require('./budget_seed');
 
 ensureDefaultAdminSeeded();
+ensureBudgetSeeded();
 Object.entries(EVENT_DEFAULTS).forEach(([key, val]) => {
   if (getSetting(key) === undefined) setSetting(key, val);
 });
@@ -16,7 +18,7 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(
   session({
     name: 'camp.sid',

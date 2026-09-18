@@ -64,10 +64,59 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS divisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  head_name TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS subcommittees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  division_id INTEGER NOT NULL REFERENCES divisions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL UNIQUE,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS budget_lines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subcommittee_id INTEGER NOT NULL REFERENCES subcommittees(id) ON DELETE CASCADE,
+  year INTEGER NOT NULL,
+  approved_budget REAL NOT NULL DEFAULT 0,
+  manual_disbursed REAL NOT NULL DEFAULT 0,
+  manual_refunded REAL NOT NULL DEFAULT 0,
+  UNIQUE(subcommittee_id, year)
+);
+
+CREATE TABLE IF NOT EXISTS requisitions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requestor_name TEXT NOT NULL,
+  requestor_contact TEXT NOT NULL,
+  subcommittee_id INTEGER NOT NULL REFERENCES subcommittees(id),
+  description TEXT NOT NULL,
+  recommended_vendor TEXT,
+  amount_requested REAL NOT NULL,
+  date_required TEXT,
+  priority TEXT NOT NULL DEFAULT '3',
+  payment_method TEXT NOT NULL CHECK (payment_method IN ('Cash','Bank','Cash Send')),
+  banking_details TEXT,
+  payment_reference TEXT,
+  proof_of_payment_email TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined','review')),
+  reviewer_notes TEXT,
+  reviewed_by TEXT,
+  reviewed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_attendees_province ON attendees(province);
 CREATE INDEX IF NOT EXISTS idx_attendees_checked_in ON attendees(checked_in);
 CREATE INDEX IF NOT EXISTS idx_duties_date ON duties(duty_date);
 CREATE INDEX IF NOT EXISTS idx_duties_team ON duties(team_id);
+CREATE INDEX IF NOT EXISTS idx_subcommittees_division ON subcommittees(division_id);
+CREATE INDEX IF NOT EXISTS idx_budget_lines_year ON budget_lines(year);
+CREATE INDEX IF NOT EXISTS idx_requisitions_status ON requisitions(status);
+CREATE INDEX IF NOT EXISTS idx_requisitions_subcommittee ON requisitions(subcommittee_id);
 `);
 
 function getSetting(key, fallback) {

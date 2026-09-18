@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Requisition — South Africa Campmeeting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="site-header"><div id="site-nav"></div></header>
+
+  <main class="container section" style="max-width: 720px;">
+    <p class="eyebrow">Requisition</p>
+    <h1>Request funds for your department</h1>
+    <p>For committee heads and team members requesting funds or reimbursement. In an emergency, contact Kaisi Lebeta on <a href="tel:+27820484996">+27 82 048 4996</a>.</p>
+
+    <div id="form-wrap" class="card" style="margin-top: 24px;">
+      <div id="alert-area"></div>
+      <form id="req-form">
+        <fieldset>
+          <legend>Requestor</legend>
+          <div class="grid-2">
+            <div class="field">
+              <label for="requestorName">Name of requestor *</label>
+              <input id="requestorName" name="requestorName" required autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="requestorContact">Contact number *</label>
+              <input id="requestorContact" name="requestorContact" type="tel" required placeholder="082 000 0000" autocomplete="tel">
+            </div>
+          </div>
+          <div class="field">
+            <label for="subcommitteeId">Department *</label>
+            <select id="subcommitteeId" name="subcommitteeId" required></select>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>The request</legend>
+          <div class="field">
+            <label for="description">Description of request *</label>
+            <textarea id="description" name="description" required placeholder="What is this for?"></textarea>
+          </div>
+          <div class="field">
+            <label for="recommendedVendor">Recommended vendor *</label>
+            <input id="recommendedVendor" name="recommendedVendor" required placeholder="e.g. Makro, local supplier name">
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="amountRequested">Amount requested (R) *</label>
+              <input id="amountRequested" name="amountRequested" type="number" min="0" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="dateRequired">Date fund is required *</label>
+              <input id="dateRequired" name="dateRequired" type="date" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="priority">Priority *</label>
+            <select id="priority" name="priority" required></select>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Payment</legend>
+          <div class="field">
+            <label>Cash or bank? *</label>
+            <div class="radio-row" id="payment-method-row"></div>
+          </div>
+          <div class="field">
+            <label for="bankingDetails">Banking details (if applicable)</label>
+            <textarea id="bankingDetails" name="bankingDetails" placeholder="Account holder, bank, account number, branch code"></textarea>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="paymentReference">Payment reference (if applicable)</label>
+              <input id="paymentReference" name="paymentReference">
+            </div>
+            <div class="field">
+              <label for="proofOfPaymentEmail">Proof of payment email (if needed)</label>
+              <input id="proofOfPaymentEmail" name="proofOfPaymentEmail" type="email">
+            </div>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Submit requisition</button>
+      </form>
+    </div>
+
+    <div id="confirmation" class="card" style="display:none; text-align:center; margin-top:24px;">
+      <p class="eyebrow">Submitted</p>
+      <h2 style="margin-bottom:6px;">Requisition sent for review</h2>
+      <p>An admin will approve, decline, or follow up on this request. Let the approvers group know it's waiting:</p>
+      <div style="display:flex; gap:12px; justify-content:center; margin-top:10px; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="copy-notify-btn">Copy message for WhatsApp group</button>
+        <button class="btn btn-quiet" id="another-btn">Submit another request</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>&copy; <span id="year"></span> Apostolic Faith Church &middot; <span data-event-name>South Africa Campmeeting</span></span>
+      <a href="/staff.html">Staff sign in</a>
+    </div>
+  </footer>
+
+  <script src="/js/common.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    let subcommittees = [];
+    let lastSubmitted = null;
+
+    async function loadFormOptions() {
+      const { subcommittees: subs, priorities, paymentMethods } = await api('/api/subcommittees');
+      subcommittees = subs;
+
+      const byDivision = {};
+      subs.forEach((s) => (byDivision[s.division_name] = byDivision[s.division_name] || []).push(s));
+      const deptSelect = document.getElementById('subcommitteeId');
+      deptSelect.innerHTML =
+        '<option value="">Select a department&hellip;</option>' +
+        Object.entries(byDivision)
+          .map(
+            ([division, items]) =>
+              `<optgroup label="${division}">${items.map((s) => `<option value="${s.id}">${s.name}</option>`).join('')}</optgroup>`
+          )
+          .join('');
+
+      const prioritySelect = document.getElementById('priority');
+      prioritySelect.innerHTML = priorities.map((p) => `<option value="${p}" ${p === '3' ? 'selected' : ''}>${p}</option>`).join('');
+
+      document.getElementById('payment-method-row').innerHTML = paymentMethods
+        .map(
+          (m, i) =>
+            `<label><input type="radio" name="paymentMethod" value="${m}" ${i === 0 ? 'checked' : ''}> ${m}</label>`
+        )
+        .join('');
+    }
+
+    const form = document.getElementById('req-form');
+    const alertArea = document.getElementById('alert-area');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertArea.innerHTML = '';
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+
+      const fd = new FormData(form);
+      const payload = Object.fromEntries(fd.entries());
+
+      try {
+        const requisition = await api('/api/requisitions', { method: 'POST', body: payload });
+        lastSubmitted = requisition;
+        document.getElementById('form-wrap').style.display = 'none';
+        document.getElementById('confirmation').style.display = '';
+      } catch (err) {
+        alertArea.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+        btn.disabled = false;
+        btn.textContent = 'Submit requisition';
+      }
+    });
+
+    document.getElementById('copy-notify-btn').addEventListener('click', async () => {
+      if (!lastSubmitted) return;
+      const sub = subcommittees.find((s) => s.id === lastSubmitted.subcommittee_id);
+      const message =
+        `📋 New requisition submitted\n` +
+        `Requestor: ${lastSubmitted.requestor_name}\n` +
+        `Department: ${sub ? sub.name : ''}\n` +
+        `Amount: R${Number(lastSubmitted.amount_requested).toFixed(2)}\n` +
+        `Needed by: ${lastSubmitted.date_required || 'not specified'}\n` +
+        `Description: ${lastSubmitted.description}\n\n` +
+        `Review it in the Staff area → Requisitions.`;
+      const ok = await copyToClipboard(message);
+      toast(ok ? 'Message copied — paste it into the WhatsApp group' : 'Could not copy — select and copy manually', !ok);
+    });
+
+    document.getElementById('another-btn').addEventListener('click', () => {
+      form.reset();
+      document.getElementById('confirmation').style.display = 'none';
+      document.getElementById('form-wrap').style.display = '';
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('submit-btn').textContent = 'Submit requisition';
+    });
+
+    loadFormOptions();
+  </script>
+</body>
+</html>

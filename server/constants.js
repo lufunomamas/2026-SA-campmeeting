@@ -17,4 +17,14 @@ const EVENT_DEFAULTS = {
   event_end: '2027-01-02',
 };
 
-module.exports = { SA_PROVINCES, EVENT_DEFAULTS };
+const REQUISITION_PRIORITIES = ['Very high', '1', '2', '3', '4', '5', 'Very low'];
+const PAYMENT_METHODS = ['Cash', 'Bank', 'Cash Send'];
+const REQUISITION_STATUSES = ['pending', 'approved', 'declined', 'review'];
+
+module.exports = {
+  SA_PROVINCES,
+  EVENT_DEFAULTS,
+  REQUISITION_PRIORITIES,
+  PAYMENT_METHODS,
+  REQUISITION_STATUSES,
+};
