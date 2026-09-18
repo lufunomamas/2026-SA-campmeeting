@@ -733,7 +733,7 @@ async function loadBudget() {
 
     const grand = { approved: 0, disbursed: 0, refunded: 0, net: 0, overUnder: 0 };
 
-    const header = `
+    const headerHtml = `
       <div class="budget-row budget-header">
         <div>Sub-Committee</div>
         <div class="num">Approved Budget</div>
@@ -744,7 +744,7 @@ async function loadBudget() {
         <div></div>
       </div>`;
 
-    el.innerHTML = header + Object.entries(byDivision)
+    el.innerHTML = Object.entries(byDivision)
       .map(([division, rows]) => {
         const headName = rows[0].head_name || '';
         const sub = { approved: 0, disbursed: 0, refunded: 0, net: 0, overUnder: 0 };
@@ -779,6 +779,7 @@ async function loadBudget() {
             <h4>${division}</h4>
             <span class="head-name">${headName}</span>
           </div>
+          ${headerHtml}
           ${rowsHtml}
           <div class="budget-row totals">
             <div>Subtotal</div>
