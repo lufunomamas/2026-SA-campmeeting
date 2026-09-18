@@ -546,17 +546,21 @@ async function loadUsers() {
       .map((u) => {
         const roleLabel = ROLE_ROW_LABEL[u.role] || u.role;
         const meta = u.role === 'department_admin' && u.division_name ? `${roleLabel} — ${u.division_name}` : roleLabel;
+        const isSelf = u.username === currentUsername;
+        const lockedForMe = u.protected && !isSelf;
+        const actions = lockedForMe
+          ? `<span class="badge" title="Only ${u.username} can change this account">Protected</span>`
+          : `
+          <button class="btn btn-sm btn-quiet edit-user-btn" data-id="${u.id}">Edit</button>
+          <button class="btn btn-sm btn-quiet reset-pin-btn" data-id="${u.id}" data-username="${u.username}">Reset PIN</button>
+          <button class="btn btn-sm btn-danger del-user-btn" data-id="${u.id}">Delete</button>`;
         return `
       <div class="team-card">
         <div class="info">
-          <div class="name">${u.username}${u.username === currentUsername ? ' <span class="badge">You</span>' : ''}</div>
+          <div class="name">${u.username}${isSelf ? ' <span class="badge">You</span>' : ''}${u.protected ? ' <span class="badge badge-gold">Owner</span>' : ''}</div>
           <div class="meta">${meta}</div>
         </div>
-        <div class="row-actions">
-          <button class="btn btn-sm btn-quiet edit-user-btn" data-id="${u.id}">Edit</button>
-          <button class="btn btn-sm btn-quiet reset-pin-btn" data-id="${u.id}" data-username="${u.username}">Reset PIN</button>
-          <button class="btn btn-sm btn-danger del-user-btn" data-id="${u.id}">Delete</button>
-        </div>
+        <div class="row-actions">${actions}</div>
       </div>`;
       })
       .join('');

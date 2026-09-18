@@ -10,6 +10,11 @@ function ensureDefaultAdminSeeded() {
   if (count === 0) {
     createUser(DEFAULT_USERNAME, DEFAULT_PIN, 'admin', null);
   }
+  // The very first admin account is the app owner: no other super admin can
+  // delete or modify it, regardless of how many admins exist. Idempotent, and
+  // re-applied on every boot so it also protects an account that already
+  // existed before this protection was introduced.
+  db.prepare('UPDATE users SET protected = 1 WHERE username = ?').run(normalizeUsername(DEFAULT_USERNAME));
 }
 
 function normalizeUsername(username) {
@@ -44,10 +49,21 @@ function validateDivisionForRole(role, divisionId) {
   return id;
 }
 
+/** Throws if `target` is a protected (owner) account and the acting user is
+ * someone else. The owner may still act on their own account. */
+function assertNotProtectedByOther(target, actingUserId) {
+  if (target.protected && target.id !== actingUserId) {
+    throw Object.assign(
+      new Error(`This account is protected — only ${target.username} can change it.`),
+      { status: 403 }
+    );
+  }
+}
+
 function getUserById(id) {
   return db
     .prepare(`
-      SELECT u.id, u.username, u.role, u.division_id, d.name AS division_name, u.created_at
+      SELECT u.id, u.username, u.role, u.division_id, d.name AS division_name, u.protected, u.created_at
       FROM users u LEFT JOIN divisions d ON d.id = u.division_id
       WHERE u.id = ?
     `)
@@ -57,16 +73,17 @@ function getUserById(id) {
 function listUsers() {
   return db
     .prepare(`
-      SELECT u.id, u.username, u.role, u.division_id, d.name AS division_name, u.created_at
+      SELECT u.id, u.username, u.role, u.division_id, d.name AS division_name, u.protected, u.created_at
       FROM users u LEFT JOIN divisions d ON d.id = u.division_id
       ORDER BY u.created_at
     `)
     .all();
 }
 
-function updateUser(id, { role, divisionId }) {
+function updateUser(id, { role, divisionId }, actingUserId) {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!target) throw Object.assign(new Error('Account not found.'), { status: 404 });
+  assertNotProtectedByOther(target, actingUserId);
 
   const nextRole = role !== undefined ? role : target.role;
   if (!ROLES.includes(nextRole)) {
@@ -83,9 +100,10 @@ function updateUser(id, { role, divisionId }) {
   return getUserById(id);
 }
 
-function deleteUser(id) {
+function deleteUser(id, actingUserId) {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!target) return;
+  assertNotProtectedByOther(target, actingUserId);
   if (target.role === 'admin') {
     const adminCount = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
     if (adminCount <= 1) {
@@ -95,10 +113,13 @@ function deleteUser(id) {
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
 }
 
-function resetUserPin(id, newPin) {
+function resetUserPin(id, newPin, actingUserId) {
   if (!newPin || String(newPin).length < 4) {
     throw Object.assign(new Error('PIN must be at least 4 characters.'), { status: 400 });
   }
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!target) throw Object.assign(new Error('Account not found.'), { status: 404 });
+  assertNotProtectedByOther(target, actingUserId);
   db.prepare('UPDATE users SET pin_hash = ? WHERE id = ?').run(bcrypt.hashSync(String(newPin), 10), id);
 }
 

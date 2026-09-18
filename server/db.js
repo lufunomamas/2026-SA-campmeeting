@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS users (
   pin_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin','department_admin','checkin')),
   division_id INTEGER REFERENCES divisions(id),
+  protected INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -132,12 +133,16 @@ if (!userCols.some((c) => c.name === 'division_id')) {
       pin_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin','department_admin','checkin')),
       division_id INTEGER REFERENCES divisions(id),
+      protected INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     INSERT INTO users (id, username, pin_hash, role, created_at)
       SELECT id, username, pin_hash, role, created_at FROM users_old_migrate;
     DROP TABLE users_old_migrate;
   `);
+}
+if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'protected')) {
+  db.exec('ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;');
 }
 
 function getSetting(key, fallback) {

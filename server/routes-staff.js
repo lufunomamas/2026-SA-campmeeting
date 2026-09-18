@@ -625,7 +625,7 @@ router.post('/users', requireAdmin, (req, res) => {
 router.patch('/users/:id', requireAdmin, (req, res) => {
   const { role, divisionId } = req.body || {};
   try {
-    const user = updateUser(Number(req.params.id), { role, divisionId });
+    const user = updateUser(Number(req.params.id), { role, divisionId }, req.session.userId);
     res.json(user);
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
@@ -635,7 +635,7 @@ router.patch('/users/:id', requireAdmin, (req, res) => {
 router.post('/users/:id/reset-pin', requireAdmin, (req, res) => {
   const { newPin } = req.body || {};
   try {
-    resetUserPin(Number(req.params.id), newPin);
+    resetUserPin(Number(req.params.id), newPin, req.session.userId);
     res.json({ ok: true });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
@@ -644,7 +644,7 @@ router.post('/users/:id/reset-pin', requireAdmin, (req, res) => {
 
 router.delete('/users/:id', requireAdmin, (req, res) => {
   try {
-    deleteUser(Number(req.params.id));
+    deleteUser(Number(req.params.id), req.session.userId);
     res.json({ ok: true });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
