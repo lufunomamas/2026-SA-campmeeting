@@ -1,7 +1,6 @@
 function renderNav(active) {
   const links = [
     ['/', 'Home'],
-    ['/register.html', 'Register'],
     ['/roster.html', 'Duty Roster'],
     ['/requisition.html', 'Requisition'],
     ['/staff.html', 'Staff'],
