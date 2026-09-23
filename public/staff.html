@@ -326,7 +326,9 @@
       <h3 style="margin-bottom:4px;">Requisition <span id="rq-id"></span></h3>
       <p class="hint" id="rq-submitted" style="margin-bottom:16px;"></p>
 
-      <fieldset>
+      <p class="hint" id="rq-lock-notice" hidden style="margin:-8px 0 14px; color:var(--brick);">This requisition has already been reviewed — only a super admin can change its details or delete it now. You can still update fund usage below.</p>
+
+      <fieldset id="rq-details-fieldset">
         <legend>Details</legend>
         <p class="hint" style="margin-top:-6px; margin-bottom:14px;">Fix a mistake in what was submitted — changes are saved when you hit Save below.</p>
         <div class="grid-2">
@@ -351,7 +353,7 @@
         </div>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="rq-review-fieldset">
         <legend>Review</legend>
         <div class="field">
           <label for="rq-status">Status</label>

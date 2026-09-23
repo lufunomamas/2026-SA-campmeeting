@@ -797,6 +797,13 @@ function openRequisitionDialog(r) {
   renderBalance(r);
   renderReceipts(r);
 
+  const isLocked = r.status !== 'pending' || !!r.reviewed_by || !!r.reviewer_notes;
+  const restricted = currentRole === 'department_admin' && isLocked;
+  document.getElementById('rq-lock-notice').hidden = !restricted;
+  document.getElementById('rq-details-fieldset').disabled = restricted;
+  document.getElementById('rq-review-fieldset').disabled = restricted;
+  document.getElementById('rq-delete').style.display = restricted ? 'none' : '';
+
   const statusMessage = {
     pending: 'is still pending review',
     review: 'is under review — we may follow up with questions',

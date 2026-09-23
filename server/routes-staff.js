@@ -309,6 +309,21 @@ function attachExtras(row) {
   return row;
 }
 
+// A requisition is "locked" for a department admin as soon as it's been
+// touched by review in any way (status moved off pending, a reviewer note
+// was left, or reviewed_by/reviewed_at got set) — only a super admin can
+// still edit its submission details or delete it after that. Fund usage
+// (actual spent / usage notes / receipts) stays open regardless.
+function isRequisitionLocked(row) {
+  return row.status !== 'pending' || row.reviewed_by != null || row.reviewer_notes != null;
+}
+
+const REQUISITION_DETAIL_FIELDS = [
+  'status', 'reviewerNotes', 'subcommitteeId', 'requestorName', 'requestorContact',
+  'description', 'recommendedVendor', 'amountRequested', 'dateRequired', 'priority',
+  'paymentMethod', 'bankingDetails', 'paymentReference', 'proofOfPaymentEmail',
+];
+
 router.get('/requisitions', requireRequisitionAccess, (req, res) => {
   const { status, subcommittee_id, search } = req.query;
   const myDivisionId = scopeDivisionId(req);
@@ -338,6 +353,13 @@ router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
   }
 
   const b = req.body || {};
+
+  if (myDivisionId && isRequisitionLocked(existing) && REQUISITION_DETAIL_FIELDS.some((f) => b[f] !== undefined)) {
+    return res.status(403).json({
+      error: 'This requisition has already been reviewed — only a super admin can change its details now. You can still update fund usage.',
+    });
+  }
+
   const fields = [];
   const params = [];
   const setIf = (col, val) => { if (val !== undefined) { fields.push(`${col} = ?`); params.push(val); } };
@@ -411,6 +433,9 @@ router.delete('/requisitions/:id', requireRequisitionAccess, (req, res) => {
   const myDivisionId = scopeDivisionId(req);
   if (myDivisionId && existing.division_id !== myDivisionId) {
     return res.status(403).json({ error: 'This requisition belongs to another division.' });
+  }
+  if (myDivisionId && isRequisitionLocked(existing)) {
+    return res.status(403).json({ error: 'This requisition has already been reviewed — only a super admin can delete it now.' });
   }
 
   db.prepare('DELETE FROM requisitions WHERE id = ?').run(id);
