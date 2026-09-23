@@ -12,98 +12,94 @@
 <body>
   <header class="site-header"><div id="site-nav"></div></header>
 
-  <section class="hero">
-    <div class="hero-inner">
-      <div>
-        <p class="eyebrow">Welcome, family</p>
-        <h1>One family, gathered<br>from every province.</h1>
-        <p style="max-width: 46ch; font-size: 1.05rem;">
-          Register for the campmeeting, see who's arriving from where, and check when your
-          province or team is on duty for cooking and cleaning.
-        </p>
-        <div class="hero-meta">
-          <span>📍 <span data-event-location>—</span></span>
-          <span>🗓️ <span data-event-dates>—</span></span>
-        </div>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="/roster.html">View duty roster</a>
+  <div id="public-view" hidden>
+    <section class="hero">
+      <div class="hero-inner">
+        <div>
+          <p class="eyebrow">Welcome, family</p>
+          <h1>One family, gathered<br>from every province.</h1>
+          <p style="max-width: 46ch; font-size: 1.05rem;">
+            See when your province or team is on duty for cooking and cleaning, or get in touch with the office below.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="/roster.html">View duty roster</a>
+          </div>
         </div>
       </div>
+    </section>
 
-      <div class="hero-card">
-        <p class="eyebrow" style="margin-bottom:14px;">Registered so far</p>
-        <div class="stat-row" id="home-stats">
-          <div class="stat-tile"><div class="num">—</div><div class="label">People</div></div>
-          <div class="stat-tile"><div class="num">—</div><div class="label">Households</div></div>
-          <div class="stat-tile"><div class="num">—</div><div class="label">Checked in</div></div>
+    <section class="theme-band">
+      <div class="container theme-band-inner">
+        <div>
+          <p class="eyebrow eyebrow-invert">2026 Theme</p>
+          <h2>Salvation by the Remission of Sins</h2>
+        </div>
+        <div class="scripture-card">
+          <p class="scripture-ref">Luke 1:77 <span>(KJV)</span></p>
+          <p class="scripture-text">&ldquo;To give knowledge of salvation unto his people by the remission of their sins.&rdquo;</p>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="theme-band">
-    <div class="container theme-band-inner">
-      <div>
-        <p class="eyebrow eyebrow-invert">2026 Theme</p>
-        <h2>Salvation by the Remission of Sins</h2>
+    <section class="container section-tight">
+      <div class="section-head">
+        <h2>Duty roster — coming up</h2>
+        <a class="btn btn-sm btn-quiet" href="/roster.html">Full roster</a>
       </div>
-      <div class="scripture-card">
-        <p class="scripture-ref">Luke 1:77 <span>(KJV)</span></p>
-        <p class="scripture-text">&ldquo;To give knowledge of salvation unto his people by the remission of their sins.&rdquo;</p>
-      </div>
-    </div>
-  </section>
+      <div id="upcoming-duties"><p class="empty-state">Loading…</p></div>
+    </section>
 
-  <main class="container section">
-    <div class="section-head">
-      <h2>Where our family is coming from</h2>
+    <section class="container section-tight">
+      <div class="section-head">
+        <h2>Contact &amp; join online</h2>
+      </div>
+      <div class="contact-grid">
+        <a class="contact-card" href="mailto:info@apostolicfaithsa.org">
+          <span class="contact-icon">📧</span>
+          <span class="contact-label">Email</span>
+          <span class="contact-value">info@apostolicfaithsa.org</span>
+        </a>
+        <a class="contact-card" href="https://wa.me/27833736187">
+          <span class="contact-icon">💬</span>
+          <span class="contact-label">Office WhatsApp</span>
+          <span class="contact-value">083 373 6187</span>
+        </a>
+        <div class="contact-card">
+          <span class="contact-icon">🎥</span>
+          <span class="contact-label">Join us on Zoom</span>
+          <span class="contact-value">Meeting ID 138 093 682 · Passcode 111</span>
+        </div>
+      </div>
+      <div class="social-row">
+        <span class="social-item">▶️ YouTube — Apostolic Faith Church Portland Oregon RSA</span>
+        <span class="social-item">📘 Facebook — Apostolic Faith Church Portland Oregon RSA</span>
+        <a class="social-item" href="https://www.tiktok.com/@afc_portlandrsa" target="_blank" rel="noopener">🎵 TikTok — @afc_portlandrsa</a>
+      </div>
+    </section>
+
+    <div class="container section-tight" style="text-align:center;">
       <a class="btn btn-sm btn-quiet" href="/staff.html">Staff sign in</a>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Province / Country</th><th class="num">Households</th><th class="num">People</th></tr></thead>
-        <tbody id="province-rows">
-          <tr><td colspan="3" class="empty-state">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </main>
+  </div>
 
-  <section class="container section-tight">
-    <div class="section-head">
-      <h2>Duty roster — coming up</h2>
-      <a class="btn btn-sm btn-quiet" href="/roster.html">Full roster</a>
-    </div>
-    <div id="upcoming-duties"><p class="empty-state">Loading…</p></div>
-  </section>
-
-  <section class="container section-tight">
-    <div class="section-head">
-      <h2>Contact &amp; join online</h2>
-    </div>
-    <div class="contact-grid">
-      <a class="contact-card" href="mailto:info@apostolicfaithsa.org">
-        <span class="contact-icon">📧</span>
-        <span class="contact-label">Email</span>
-        <span class="contact-value">info@apostolicfaithsa.org</span>
-      </a>
-      <a class="contact-card" href="https://wa.me/27833736187">
-        <span class="contact-icon">💬</span>
-        <span class="contact-label">Office WhatsApp</span>
-        <span class="contact-value">083 373 6187</span>
-      </a>
-      <div class="contact-card">
-        <span class="contact-icon">🎥</span>
-        <span class="contact-label">Join us on Zoom</span>
-        <span class="contact-value">Meeting ID 138 093 682 · Passcode 111</span>
+  <div id="dashboard-view" hidden>
+    <section class="container section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow" id="dash-eyebrow">Staff area</p>
+          <h1 style="margin:0;">Dashboard</h1>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn btn-quiet btn-sm" href="/staff.html">Full control room</a>
+          <button class="btn btn-quiet btn-sm" id="dash-logout">Log out</button>
+        </div>
       </div>
-    </div>
-    <div class="social-row">
-      <span class="social-item">▶️ YouTube — Apostolic Faith Church Portland Oregon RSA</span>
-      <span class="social-item">📘 Facebook — Apostolic Faith Church Portland Oregon RSA</span>
-      <a class="social-item" href="https://www.tiktok.com/@afc_portlandrsa" target="_blank" rel="noopener">🎵 TikTok — @afc_portlandrsa</a>
-    </div>
-  </section>
+      <p id="dash-checkin-notice" class="empty-state" hidden>
+        You're signed in as a check-in volunteer — head to the <a href="/staff.html">Staff area</a> to check attendees in.
+      </p>
+      <div id="dash-cards" class="dash-grid"></div>
+    </section>
+  </div>
 
   <footer class="site-footer">
     <div class="container">
@@ -115,29 +111,6 @@
   <script src="/js/common.js"></script>
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
-
-    async function loadStats() {
-      try {
-        const { totals, byProvince } = await api('/api/stats');
-        const tiles = document.querySelectorAll('#home-stats .num');
-        tiles[0].textContent = totals.people ?? 0;
-        tiles[1].textContent = totals.registrations ?? 0;
-        tiles[2].textContent = totals.checked_in ?? 0;
-
-        const tbody = document.getElementById('province-rows');
-        if (!byProvince.length) {
-          tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No registrations yet — be the first!</td></tr>';
-        } else {
-          tbody.innerHTML = byProvince
-            .map(
-              (r) => `<tr><td>${r.place}${r.origin_type === 'international' ? ' <span class="badge badge-gold">Int\'l</span>' : ''}</td><td class="num">${r.registrations}</td><td class="num">${r.people}</td></tr>`
-            )
-            .join('');
-        }
-      } catch (e) {
-        toast('Could not load stats', true);
-      }
-    }
 
     async function loadUpcoming() {
       try {
@@ -176,8 +149,82 @@
       }
     }
 
-    loadStats();
-    loadUpcoming();
+    const statusLabel = { pending: 'Pending', review: 'Under review', approved: 'Approved', declined: 'Declined' };
+
+    function renderDashCards(summaries) {
+      const el = document.getElementById('dash-cards');
+      if (!summaries.length) {
+        el.innerHTML = '<p class="empty-state">No requisition data yet.</p>';
+        return;
+      }
+      el.innerHTML = summaries
+        .map(
+          (s) => `
+        <div class="dash-card">
+          <h3>${s.divisionName}</h3>
+          <div class="dash-status-row">
+            <span class="badge">${s.pendingCount} pending</span>
+            <span class="badge badge-gold">${s.reviewCount} review</span>
+            <span class="badge badge-green">${s.approvedCount} approved</span>
+            <span class="badge badge-brick">${s.declinedCount} declined</span>
+          </div>
+          <div class="dash-figures">
+            <div><span class="label">Requested</span><span class="value">${fmtMoney(s.totalRequested)}</span></div>
+            <div><span class="label">Approved</span><span class="value">${fmtMoney(s.totalApprovedAmount)}</span></div>
+            <div><span class="label">Actually spent</span><span class="value">${s.reportedCount ? fmtMoney(s.totalActualSpent) : '—'}</span></div>
+          </div>
+          ${
+            s.owedToChurch > 0 || s.owedToRequestor > 0
+              ? `<div class="dash-balance">
+                  ${s.owedToChurch > 0 ? `<span class="balance-owed-church">${fmtMoney(s.owedToChurch)} owed back to the church</span>` : ''}
+                  ${s.owedToRequestor > 0 ? `<span class="balance-owed-requestor">${fmtMoney(s.owedToRequestor)} owed to requestors</span>` : ''}
+                </div>`
+              : '<div class="dash-balance balance-settled">No outstanding balances</div>'
+          }
+        </div>`
+        )
+        .join('');
+    }
+
+    async function initDashboard(session) {
+      document.getElementById('public-view').hidden = true;
+      document.getElementById('dashboard-view').hidden = false;
+      document.getElementById('dash-eyebrow').textContent =
+        `Staff area · ${session.username} (${session.role === 'admin' ? 'Super admin' : session.role === 'department_admin' ? session.divisionName + ' admin' : 'Check-in'})`;
+
+      document.getElementById('dash-logout').addEventListener('click', async () => {
+        await api('/api/staff/logout', { method: 'POST' });
+        window.location.reload();
+      });
+
+      if (session.role === 'checkin') {
+        document.getElementById('dash-checkin-notice').hidden = false;
+        return;
+      }
+
+      try {
+        const summaries = await api('/api/staff/dashboard-summary');
+        renderDashCards(summaries);
+      } catch (e) {
+        document.getElementById('dash-cards').innerHTML = '<p class="empty-state">Could not load dashboard.</p>';
+      }
+    }
+
+    function initPublic() {
+      document.getElementById('public-view').hidden = false;
+      document.getElementById('dashboard-view').hidden = true;
+      loadUpcoming();
+    }
+
+    (async () => {
+      try {
+        const session = await api('/api/staff/session');
+        if (session.loggedIn) initDashboard(session);
+        else initPublic();
+      } catch (e) {
+        initPublic();
+      }
+    })();
   </script>
 </body>
 </html>

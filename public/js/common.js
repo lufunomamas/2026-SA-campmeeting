@@ -52,6 +52,10 @@ async function loadEventConfig() {
   }
 }
 
+function fmtMoney(n) {
+  return 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');

@@ -469,6 +469,58 @@ router.delete('/requisitions/:id/receipts/:receiptId', requireRequisitionAccess,
   res.json(attachExtras(row));
 });
 
+// Per-division requisition + fund-usage summary for the homepage dashboard.
+// Department admins get just their own division; super admins get every
+// division, in `divisions.sort_order`.
+router.get('/dashboard-summary', requireRequisitionAccess, (req, res) => {
+  const myDivisionId = scopeDivisionId(req);
+
+  const blank = (div) => ({
+    divisionId: div.id,
+    divisionName: div.name,
+    totalCount: 0,
+    pendingCount: 0,
+    reviewCount: 0,
+    approvedCount: 0,
+    declinedCount: 0,
+    totalRequested: 0,
+    totalApprovedAmount: 0,
+    totalActualSpent: 0,
+    reportedCount: 0,
+    owedToChurch: 0,
+    owedToRequestor: 0,
+  });
+
+  const divisions = db.prepare('SELECT id, name FROM divisions ORDER BY sort_order').all();
+  const summaries = new Map(divisions.map((div) => [div.id, blank(div)]));
+
+  let sql = REQUISITION_SELECT + ' WHERE 1=1';
+  const params = [];
+  if (myDivisionId) { sql += ' AND d.id = ?'; params.push(myDivisionId); }
+  const rows = db.prepare(sql).all(...params);
+
+  for (const r of rows) {
+    const s = summaries.get(r.division_id);
+    if (!s) continue;
+    s.totalCount += 1;
+    s[`${r.status}Count`] += 1;
+    s.totalRequested += r.amount_requested;
+    if (r.status === 'approved') s.totalApprovedAmount += r.amount_requested;
+    if (r.actual_spent != null) {
+      s.reportedCount += 1;
+      s.totalActualSpent += r.actual_spent;
+      const balance = r.amount_requested - r.actual_spent;
+      if (balance > 0) s.owedToChurch += balance;
+      else if (balance < 0) s.owedToRequestor += -balance;
+    }
+  }
+
+  const result = myDivisionId
+    ? [summaries.get(myDivisionId)].filter(Boolean)
+    : divisions.map((div) => summaries.get(div.id));
+  res.json(result);
+});
+
 router.get('/requisitions-export.csv', requireRequisitionAccess, (req, res) => {
   const myDivisionId = scopeDivisionId(req);
   const rows = myDivisionId

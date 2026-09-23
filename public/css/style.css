@@ -330,6 +330,27 @@ a { color: var(--green); }
   .theme-band-inner { grid-template-columns: 1fr; }
 }
 
+/* ============ Staff dashboard ============ */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.dash-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow-md);
+}
+.dash-card h3 { margin: 0 0 12px; }
+.dash-status-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.dash-figures { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.dash-figures > div { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.9rem; }
+.dash-figures .label { color: var(--ink-faint); }
+.dash-figures .value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.dash-balance { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; padding-top: 12px; border-top: 1px solid var(--line); }
+
 /* ============ Contact ============ */
 .contact-grid {
   display: grid;

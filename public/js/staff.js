@@ -702,10 +702,6 @@ function populateSubcommitteeSelect(select) {
     .join('');
 }
 
-function fmtMoney(n) {
-  return 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
