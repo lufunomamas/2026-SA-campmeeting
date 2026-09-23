@@ -9,9 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    dialog { border: none; border-radius: 16px; padding: 0; max-width: 520px; width: 92vw; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-md); background: var(--card); color: var(--ink); }
-    dialog::backdrop { background: rgba(20, 16, 8, 0.55); }
-    .dialog-inner { padding: 24px; }
+    dialog { border: none; border-radius: 20px; padding: 0; max-width: 520px; width: 92vw; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-lg); background: var(--card); color: var(--ink); }
+    dialog::backdrop { background: color-mix(in srgb, var(--ink) 55%, transparent); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+    dialog[open] { animation: dialog-pop 0.18s ease; }
+    @keyframes dialog-pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @media (prefers-reduced-motion: reduce) { dialog[open] { animation: none; } }
+    .dialog-inner { padding: 26px; }
     @media (max-width: 480px) {
       dialog { width: 100%; max-width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
     }
