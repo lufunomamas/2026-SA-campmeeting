@@ -55,8 +55,7 @@ document.getElementById('pin-form').addEventListener('submit', async (e) => {
   alertArea.innerHTML = '';
   try {
     await api('/api/staff/login', { method: 'POST', body: { username, pin } });
-    const session = await api('/api/staff/session');
-    showApp(session.role, session.username, session.divisionId, session.divisionName);
+    window.location.href = '/';
   } catch (err) {
     alertArea.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
   }
