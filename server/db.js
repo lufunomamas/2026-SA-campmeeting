@@ -108,7 +108,17 @@ CREATE TABLE IF NOT EXISTS requisitions (
   reviewer_notes TEXT,
   reviewed_by TEXT,
   reviewed_at TEXT,
+  actual_spent REAL,
+  usage_notes TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS requisition_receipts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  requisition_id INTEGER NOT NULL REFERENCES requisitions(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  original_name TEXT,
+  uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_attendees_province ON attendees(province);
@@ -145,6 +155,15 @@ if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'protec
   db.exec('ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;');
 }
 
+// Add fund-usage tracking to requisitions created before this feature existed.
+const requisitionCols = db.prepare('PRAGMA table_info(requisitions)').all();
+if (!requisitionCols.some((c) => c.name === 'actual_spent')) {
+  db.exec('ALTER TABLE requisitions ADD COLUMN actual_spent REAL;');
+}
+if (!requisitionCols.some((c) => c.name === 'usage_notes')) {
+  db.exec('ALTER TABLE requisitions ADD COLUMN usage_notes TEXT;');
+}
+
 function getSetting(key, fallback) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? row.value : fallback;
@@ -156,4 +175,4 @@ function setSetting(key, value) {
   ).run(key, value);
 }
 
-module.exports = { db, getSetting, setSetting };
+module.exports = { db, getSetting, setSetting, dataDir };

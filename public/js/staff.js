@@ -681,10 +681,25 @@ function openResetPinDialog(id, username) {
 
 // ---- Requisitions & Budget shared ----
 let subcommitteesCache = [];
+let priorityOptionsCache = [];
+let paymentMethodOptionsCache = [];
 
 async function loadSubcommitteesCache() {
-  const { subcommittees } = await api('/api/subcommittees');
+  const { subcommittees, priorities, paymentMethods } = await api('/api/subcommittees');
   subcommitteesCache = subcommittees;
+  priorityOptionsCache = priorities;
+  paymentMethodOptionsCache = paymentMethods;
+}
+
+function populateSubcommitteeSelect(select) {
+  const byDivision = {};
+  subcommitteesCache.forEach((s) => (byDivision[s.division_name] = byDivision[s.division_name] || []).push(s));
+  select.innerHTML = Object.entries(byDivision)
+    .map(
+      ([division, items]) =>
+        `<optgroup label="${division}">${items.map((s) => `<option value="${s.id}">${s.name}</option>`).join('')}</optgroup>`
+    )
+    .join('');
 }
 
 function fmtMoney(n) {
@@ -717,6 +732,7 @@ document.getElementById('import-result-close').addEventListener('click', () => {
 
 // ---- Requisitions ----
 let reqStatusFilter = '';
+let requisitionDialogRow = null;
 
 async function loadRequisitions() {
   const tbody = document.getElementById('req-rows');
@@ -758,27 +774,33 @@ async function loadRequisitions() {
 function openRequisitionDialog(r) {
   const dialog = document.getElementById('req-dialog');
   dialog.dataset.id = r.id;
-  dialog.dataset.contact = r.requestor_contact;
+  requisitionDialogRow = r;
   document.getElementById('rq-id').textContent = `#${r.id} — ${r.division_name} / ${r.subcommittee_name}`;
   document.getElementById('rq-submitted').textContent = `Submitted ${fmtDate(r.created_at.slice(0, 10))} by ${r.requestor_name} (${r.requestor_contact})`;
 
-  const rows = [
-    ['Description', r.description],
-    ['Recommended vendor', r.recommended_vendor || '—'],
-    ['Amount requested', fmtMoney(r.amount_requested)],
-    ['Date fund required', fmtDate(r.date_required) || '—'],
-    ['Priority', r.priority],
-    ['Cash or bank', r.payment_method],
-    ['Banking details', r.banking_details || '—'],
-    ['Payment reference', r.payment_reference || '—'],
-    ['Proof of payment email', r.proof_of_payment_email || '—'],
-  ];
-  document.getElementById('rq-details').innerHTML = rows
-    .map(([label, value]) => `<div><div class="field-label-inline">${label}</div><div>${value}</div></div>`)
-    .join('');
+  populateSubcommitteeSelect(document.getElementById('rq-subcommittee'));
+  document.getElementById('rq-priority').innerHTML = priorityOptionsCache.map((p) => `<option value="${p}">${p}</option>`).join('');
+  document.getElementById('rq-paymentMethod').innerHTML = paymentMethodOptionsCache.map((m) => `<option value="${m}">${m}</option>`).join('');
 
-  document.getElementById('rq-status').value = r.status;
-  document.getElementById('rq-notes').value = r.reviewer_notes || '';
+  const form = document.getElementById('req-review-form');
+  form.requestorName.value = r.requestor_name;
+  form.requestorContact.value = r.requestor_contact;
+  form.subcommitteeId.value = r.subcommittee_id;
+  form.description.value = r.description;
+  form.recommendedVendor.value = r.recommended_vendor || '';
+  form.amountRequested.value = r.amount_requested;
+  form.dateRequired.value = r.date_required || '';
+  form.priority.value = r.priority;
+  form.paymentMethod.value = r.payment_method;
+  form.bankingDetails.value = r.banking_details || '';
+  form.paymentReference.value = r.payment_reference || '';
+  form.proofOfPaymentEmail.value = r.proof_of_payment_email || '';
+  form.status.value = r.status;
+  form.reviewerNotes.value = r.reviewer_notes || '';
+  form.actualSpent.value = r.actual_spent == null ? '' : r.actual_spent;
+  form.usageNotes.value = r.usage_notes || '';
+  renderBalance(r);
+  renderReceipts(r);
 
   const statusMessage = {
     pending: 'is still pending review',
@@ -794,16 +816,107 @@ function openRequisitionDialog(r) {
   dialog.showModal();
 }
 
+function renderBalance(r) {
+  const el = document.getElementById('rq-balance');
+  const actualSpentInput = document.getElementById('rq-actualSpent');
+  const actualSpent = actualSpentInput.value === '' ? null : parseFloat(actualSpentInput.value);
+  if (actualSpent == null || Number.isNaN(actualSpent)) {
+    el.textContent = 'Not yet reported';
+    el.className = 'hint balance-settled';
+    return;
+  }
+  const balance = r.amount_requested - actualSpent;
+  if (Math.abs(balance) < 0.01) {
+    el.textContent = 'Fully accounted for — no balance owed';
+    el.className = 'hint balance-settled';
+  } else if (balance > 0) {
+    el.textContent = `${fmtMoney(balance)} owed back to the church`;
+    el.className = 'hint balance-owed-church';
+  } else {
+    el.textContent = `${fmtMoney(-balance)} owed to ${r.requestor_name} (spent more than requested)`;
+    el.className = 'hint balance-owed-requestor';
+  }
+}
+
+function renderReceipts(r) {
+  const list = document.getElementById('rq-receipts-list');
+  if (!r.receipts || !r.receipts.length) {
+    list.innerHTML = '<li class="hint" style="border:none; padding:4px 0;">No receipts uploaded yet.</li>';
+    return;
+  }
+  list.innerHTML = r.receipts
+    .map(
+      (rec) => `
+      <li>
+        <span class="receipt-name">${rec.original_name || 'Receipt'}</span>
+        <span class="receipt-actions">
+          <a href="/api/staff/requisitions/${r.id}/receipts/${rec.id}/file" target="_blank" rel="noopener" class="btn btn-quiet btn-sm">View</a>
+          <button type="button" class="btn btn-danger btn-sm receipt-delete-btn" data-receipt-id="${rec.id}">Remove</button>
+        </span>
+      </li>`
+    )
+    .join('');
+  list.querySelectorAll('.receipt-delete-btn').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      if (!confirm('Remove this receipt?')) return;
+      try {
+        const updated = await api(`/api/staff/requisitions/${r.id}/receipts/${btn.dataset.receiptId}`, { method: 'DELETE' });
+        Object.assign(r, updated);
+        renderReceipts(r);
+        toast('Receipt removed');
+      } catch (err) {
+        toast(err.message, true);
+      }
+    })
+  );
+}
+
 function wireRequisitions() {
   const dialog = document.getElementById('req-dialog');
+  const form = document.getElementById('req-review-form');
   document.getElementById('rq-cancel').addEventListener('click', () => dialog.close());
-  document.getElementById('rq-save').addEventListener('click', async () => {
-    const id = dialog.dataset.id;
-    const status = document.getElementById('rq-status').value;
-    const reviewerNotes = document.getElementById('rq-notes').value;
+  document.getElementById('rq-actualSpent').addEventListener('input', () => {
+    const r = requisitionDialogRow;
+    if (r) renderBalance(r);
+  });
+  document.getElementById('rq-receipt-upload-btn').addEventListener('click', async () => {
+    const r = requisitionDialogRow;
+    const fileInput = document.getElementById('rq-receipt-file');
+    if (!r || !fileInput.files.length) return;
+    const fd = new FormData();
+    for (const file of fileInput.files) fd.append('receipts', file);
     try {
-      await api(`/api/staff/requisitions/${id}`, { method: 'PATCH', body: { status, reviewerNotes } });
+      const res = await fetch(`/api/staff/requisitions/${r.id}/receipts`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed.');
+      Object.assign(r, data);
+      renderReceipts(r);
+      fileInput.value = '';
+      toast('Receipt(s) uploaded');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = dialog.dataset.id;
+    const fd = new FormData(form);
+    try {
+      await api(`/api/staff/requisitions/${id}`, { method: 'PATCH', body: Object.fromEntries(fd.entries()) });
       toast('Requisition updated');
+      dialog.close();
+      loadRequisitions();
+      loadBudget();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+  document.getElementById('rq-delete').addEventListener('click', async () => {
+    const id = dialog.dataset.id;
+    if (!confirm('Delete this requisition? This cannot be undone.')) return;
+    try {
+      await api(`/api/staff/requisitions/${id}`, { method: 'DELETE' });
+      toast('Requisition deleted');
       dialog.close();
       loadRequisitions();
       loadBudget();

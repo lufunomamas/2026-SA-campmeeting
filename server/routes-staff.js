@@ -1,5 +1,9 @@
+const path = require('node:path');
+const fs = require('node:fs');
+const crypto = require('node:crypto');
 const express = require('express');
-const { db, getSetting, setSetting } = require('./db');
+const multer = require('multer');
+const { db, getSetting, setSetting, dataDir } = require('./db');
 const { SA_PROVINCES, REQUISITION_PRIORITIES, PAYMENT_METHODS, REQUISITION_STATUSES } = require('./constants');
 const { toCsv, parseCsv } = require('./csv');
 const { CURRENT_YEAR } = require('./budget_seed');
@@ -18,6 +22,24 @@ const {
 } = require('./auth');
 
 const router = express.Router();
+
+const receiptsDir = path.join(dataDir, 'receipts');
+fs.mkdirSync(receiptsDir, { recursive: true });
+const ALLOWED_RECEIPT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf']);
+const receiptUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, receiptsDir),
+    filename: (req, file, cb) => cb(null, `${crypto.randomUUID()}${path.extname(file.originalname).slice(0, 10)}`),
+  }),
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 },
+  fileFilter: (req, file, cb) => cb(null, ALLOWED_RECEIPT_TYPES.has(file.mimetype)),
+});
+function uploadReceipts(req, res, next) {
+  receiptUpload.array('receipts', 10)(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed.' });
+    next();
+  });
+}
 
 router.post('/login', (req, res) => {
   const { username, pin } = req.body || {};
@@ -270,6 +292,18 @@ const REQUISITION_SELECT = `
   JOIN divisions d ON d.id = s.division_id
 `;
 
+// Adds `receipts` (uploaded proof of spend) and `balance` (requested vs. actually
+// spent — positive means owed back to the church, negative means owed to the
+// requestor, null means usage hasn't been reported yet) to a requisition row.
+function attachExtras(row) {
+  if (!row) return row;
+  row.receipts = db
+    .prepare('SELECT id, original_name, uploaded_at FROM requisition_receipts WHERE requisition_id = ? ORDER BY uploaded_at')
+    .all(row.id);
+  row.balance = row.actual_spent == null ? null : row.amount_requested - row.actual_spent;
+  return row;
+}
+
 router.get('/requisitions', requireRequisitionAccess, (req, res) => {
   const { status, subcommittee_id, search } = req.query;
   const myDivisionId = scopeDivisionId(req);
@@ -285,7 +319,7 @@ router.get('/requisitions', requireRequisitionAccess, (req, res) => {
     params.push(like, like, like);
   }
   sql += ' ORDER BY r.created_at DESC';
-  res.json(db.prepare(sql).all(...params));
+  res.json(db.prepare(sql).all(...params).map(attachExtras));
 });
 
 router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
@@ -301,6 +335,8 @@ router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
   const b = req.body || {};
   const fields = [];
   const params = [];
+  const setIf = (col, val) => { if (val !== undefined) { fields.push(`${col} = ?`); params.push(val); } };
+
   if (b.status !== undefined) {
     if (!REQUISITION_STATUSES.includes(b.status)) {
       return res.status(400).json({ error: 'Invalid status.' });
@@ -312,10 +348,120 @@ router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
     fields.push('reviewer_notes = ?');
     params.push(String(b.reviewerNotes).trim() || null);
   }
-  if (!fields.length) return res.json(existing);
+
+  // Correcting a mistake in the original submission — available to admins
+  // and, for their own division's requests, department admins too.
+  if (b.subcommitteeId !== undefined) {
+    const newSubId = Number(b.subcommitteeId);
+    const newSub = db.prepare('SELECT id, division_id FROM subcommittees WHERE id = ?').get(newSubId);
+    if (!newSub) return res.status(400).json({ error: 'Unknown department.' });
+    if (myDivisionId && newSub.division_id !== myDivisionId) {
+      return res.status(403).json({ error: "Can't move a requisition outside your division." });
+    }
+    setIf('subcommittee_id', newSubId);
+  }
+  if (b.requestorName !== undefined) setIf('requestor_name', String(b.requestorName).trim());
+  if (b.requestorContact !== undefined) setIf('requestor_contact', String(b.requestorContact).trim());
+  if (b.description !== undefined) setIf('description', String(b.description).trim());
+  if (b.recommendedVendor !== undefined) setIf('recommended_vendor', String(b.recommendedVendor).trim() || null);
+  if (b.amountRequested !== undefined) {
+    const amount = parseFloat(b.amountRequested);
+    if (!(amount > 0)) return res.status(400).json({ error: 'Please enter a valid amount requested.' });
+    setIf('amount_requested', amount);
+  }
+  if (b.dateRequired !== undefined) setIf('date_required', b.dateRequired || null);
+  if (b.priority !== undefined) {
+    if (!REQUISITION_PRIORITIES.includes(b.priority)) return res.status(400).json({ error: 'Invalid priority.' });
+    setIf('priority', b.priority);
+  }
+  if (b.paymentMethod !== undefined) {
+    if (!PAYMENT_METHODS.includes(b.paymentMethod)) return res.status(400).json({ error: 'Invalid payment method.' });
+    setIf('payment_method', b.paymentMethod);
+  }
+  if (b.bankingDetails !== undefined) setIf('banking_details', String(b.bankingDetails).trim() || null);
+  if (b.paymentReference !== undefined) setIf('payment_reference', String(b.paymentReference).trim() || null);
+  if (b.proofOfPaymentEmail !== undefined) setIf('proof_of_payment_email', String(b.proofOfPaymentEmail).trim() || null);
+  if (b.actualSpent !== undefined) {
+    if (b.actualSpent === null || b.actualSpent === '') {
+      setIf('actual_spent', null);
+    } else {
+      const spent = parseFloat(b.actualSpent);
+      if (!(spent >= 0)) return res.status(400).json({ error: 'Please enter a valid amount spent.' });
+      setIf('actual_spent', spent);
+    }
+  }
+  if (b.usageNotes !== undefined) setIf('usage_notes', String(b.usageNotes).trim() || null);
+
+  if (!fields.length) return res.json(attachExtras(existing));
   params.push(id);
   db.prepare(`UPDATE requisitions SET ${fields.join(', ')} WHERE id = ?`).run(...params);
-  res.json(db.prepare(REQUISITION_SELECT + ' WHERE r.id = ?').get(id));
+  res.json(attachExtras(db.prepare(REQUISITION_SELECT + ' WHERE r.id = ?').get(id)));
+});
+
+router.delete('/requisitions/:id', requireRequisitionAccess, (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare(REQUISITION_SELECT + ' WHERE r.id = ?').get(id);
+  if (!existing) return res.json({ ok: true });
+
+  const myDivisionId = scopeDivisionId(req);
+  if (myDivisionId && existing.division_id !== myDivisionId) {
+    return res.status(403).json({ error: 'This requisition belongs to another division.' });
+  }
+
+  db.prepare('DELETE FROM requisitions WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// Shared by the receipt routes below: loads a requisition and 403s if it
+// belongs to another division than the requesting department admin's.
+function loadScopedRequisition(req, res, id) {
+  const row = db.prepare(REQUISITION_SELECT + ' WHERE r.id = ?').get(id);
+  if (!row) { res.status(404).json({ error: 'Requisition not found.' }); return null; }
+  const myDivisionId = scopeDivisionId(req);
+  if (myDivisionId && row.division_id !== myDivisionId) {
+    res.status(403).json({ error: 'This requisition belongs to another division.' });
+    return null;
+  }
+  return row;
+}
+
+router.post('/requisitions/:id/receipts', requireRequisitionAccess, uploadReceipts, (req, res) => {
+  const id = Number(req.params.id);
+  const row = loadScopedRequisition(req, res, id);
+  if (!row) return;
+
+  const insert = db.prepare('INSERT INTO requisition_receipts (requisition_id, filename, original_name) VALUES (?, ?, ?)');
+  for (const file of req.files || []) {
+    insert.run(id, file.filename, file.originalname);
+  }
+  res.status(201).json(attachExtras(row));
+});
+
+router.get('/requisitions/:id/receipts/:receiptId/file', requireRequisitionAccess, (req, res) => {
+  const id = Number(req.params.id);
+  const row = loadScopedRequisition(req, res, id);
+  if (!row) return;
+
+  const receipt = db
+    .prepare('SELECT * FROM requisition_receipts WHERE id = ? AND requisition_id = ?')
+    .get(Number(req.params.receiptId), id);
+  if (!receipt) return res.status(404).json({ error: 'Receipt not found.' });
+  res.sendFile(path.join(receiptsDir, receipt.filename));
+});
+
+router.delete('/requisitions/:id/receipts/:receiptId', requireRequisitionAccess, (req, res) => {
+  const id = Number(req.params.id);
+  const row = loadScopedRequisition(req, res, id);
+  if (!row) return;
+
+  const receipt = db
+    .prepare('SELECT * FROM requisition_receipts WHERE id = ? AND requisition_id = ?')
+    .get(Number(req.params.receiptId), id);
+  if (!receipt) return res.json({ ok: true });
+
+  db.prepare('DELETE FROM requisition_receipts WHERE id = ?').run(receipt.id);
+  fs.rm(path.join(receiptsDir, receipt.filename), { force: true }, () => {});
+  res.json(attachExtras(row));
 });
 
 router.get('/requisitions-export.csv', requireRequisitionAccess, (req, res) => {

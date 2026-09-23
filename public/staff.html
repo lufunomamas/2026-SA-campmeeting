@@ -322,30 +322,76 @@
 
   <!-- Requisition review dialog -->
   <dialog id="req-dialog">
-    <div class="dialog-inner">
+    <form class="dialog-inner" id="req-review-form" method="dialog">
       <h3 style="margin-bottom:4px;">Requisition <span id="rq-id"></span></h3>
       <p class="hint" id="rq-submitted" style="margin-bottom:16px;"></p>
-      <div id="rq-details" style="display:flex; flex-direction:column; gap:10px; margin-bottom:18px;"></div>
-      <div class="field">
-        <label for="rq-status">Status</label>
-        <select id="rq-status">
-          <option value="pending">Pending</option>
-          <option value="review">Under review</option>
-          <option value="approved">Approved</option>
-          <option value="declined">Declined</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="rq-notes">Reviewer notes</label>
-        <textarea id="rq-notes" placeholder="Optional — visible to other admins"></textarea>
-      </div>
+
+      <fieldset>
+        <legend>Details</legend>
+        <p class="hint" style="margin-top:-6px; margin-bottom:14px;">Fix a mistake in what was submitted — changes are saved when you hit Save below.</p>
+        <div class="grid-2">
+          <div class="field"><label for="rq-requestorName">Name of requestor</label><input id="rq-requestorName" name="requestorName" required></div>
+          <div class="field"><label for="rq-requestorContact">Contact number</label><input id="rq-requestorContact" name="requestorContact" required></div>
+        </div>
+        <div class="field"><label for="rq-subcommittee">Department</label><select id="rq-subcommittee" name="subcommitteeId"></select></div>
+        <div class="field"><label for="rq-description">Description of request</label><textarea id="rq-description" name="description" required></textarea></div>
+        <div class="field"><label for="rq-vendor">Recommended vendor</label><input id="rq-vendor" name="recommendedVendor"></div>
+        <div class="grid-2">
+          <div class="field"><label for="rq-amount">Amount requested (R)</label><input id="rq-amount" name="amountRequested" type="number" min="0" step="0.01" required></div>
+          <div class="field"><label for="rq-dateRequired">Date fund required</label><input id="rq-dateRequired" name="dateRequired" type="date"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label for="rq-priority">Priority</label><select id="rq-priority" name="priority"></select></div>
+          <div class="field"><label for="rq-paymentMethod">Cash or bank</label><select id="rq-paymentMethod" name="paymentMethod"></select></div>
+        </div>
+        <div class="field"><label for="rq-bankingDetails">Banking details</label><textarea id="rq-bankingDetails" name="bankingDetails"></textarea></div>
+        <div class="grid-2">
+          <div class="field"><label for="rq-paymentReference">Payment reference</label><input id="rq-paymentReference" name="paymentReference"></div>
+          <div class="field"><label for="rq-proofEmail">Proof of payment email</label><input id="rq-proofEmail" name="proofOfPaymentEmail" type="email"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Review</legend>
+        <div class="field">
+          <label for="rq-status">Status</label>
+          <select id="rq-status" name="status">
+            <option value="pending">Pending</option>
+            <option value="review">Under review</option>
+            <option value="approved">Approved</option>
+            <option value="declined">Declined</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rq-notes">Reviewer notes</label>
+          <textarea id="rq-notes" name="reviewerNotes" placeholder="Optional — visible to other admins"></textarea>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Fund usage</legend>
+        <p class="hint" style="margin-top:-6px; margin-bottom:14px;">Once they've spent the money, record what it actually cost and attach their receipts.</p>
+        <div class="grid-2">
+          <div class="field"><label for="rq-actualSpent">Amount actually spent (R)</label><input id="rq-actualSpent" name="actualSpent" type="number" min="0" step="0.01" placeholder="Not yet reported"></div>
+          <div class="field"><label>Balance</label><p id="rq-balance" class="hint" style="margin:0; padding-top:8px;">—</p></div>
+        </div>
+        <div class="field"><label for="rq-usageNotes">Notes on how the money was used</label><textarea id="rq-usageNotes" name="usageNotes" placeholder="Optional"></textarea></div>
+        <div class="field">
+          <label for="rq-receipt-file">Attach receipts</label>
+          <input id="rq-receipt-file" type="file" accept="image/*,application/pdf" multiple>
+          <button type="button" class="btn btn-quiet btn-sm" id="rq-receipt-upload-btn" style="margin-top:8px;">Upload receipt(s)</button>
+        </div>
+        <ul id="rq-receipts-list" class="receipts-list"></ul>
+      </fieldset>
+
       <div class="dialog-actions" style="flex-wrap:wrap;">
         <a class="btn btn-quiet" id="rq-whatsapp-link" target="_blank" rel="noopener">Notify requester on WhatsApp</a>
+        <button type="button" class="btn btn-danger" id="rq-delete">Delete</button>
         <div class="spacer"></div>
         <button type="button" class="btn btn-quiet" id="rq-cancel">Close</button>
-        <button type="button" class="btn btn-primary" id="rq-save">Save status</button>
+        <button type="submit" class="btn btn-primary" id="rq-save">Save</button>
       </div>
-    </div>
+    </form>
   </dialog>
 
   <!-- Budget line dialog -->
