@@ -23,6 +23,11 @@ const {
 
 const router = express.Router();
 
+// Coerces a possibly-null/undefined API value to a trimmed string; String(null)
+// would otherwise stringify to the literal text "null" instead of clearing it.
+const str = (v) => String(v ?? '').trim();
+const nullableStr = (v) => str(v) || null;
+
 const receiptsDir = path.join(dataDir, 'receipts');
 fs.mkdirSync(receiptsDir, { recursive: true });
 const ALLOWED_RECEIPT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf']);
@@ -152,12 +157,12 @@ router.patch('/attendees/:id', requireAdmin, (req, res) => {
   const params = [];
   const setIf = (col, val) => { if (val !== undefined) { fields.push(`${col} = ?`); params.push(val); } };
 
-  setIf('full_name', b.fullName !== undefined ? String(b.fullName).trim() : undefined);
-  setIf('phone', b.phone !== undefined ? String(b.phone).trim() || null : undefined);
-  setIf('email', b.email !== undefined ? String(b.email).trim() || null : undefined);
-  setIf('assembly', b.assembly !== undefined ? String(b.assembly).trim() || null : undefined);
-  setIf('accommodation', b.accommodation !== undefined ? String(b.accommodation).trim() || null : undefined);
-  setIf('notes', b.notes !== undefined ? String(b.notes).trim() || null : undefined);
+  setIf('full_name', b.fullName !== undefined ? str(b.fullName) : undefined);
+  setIf('phone', b.phone !== undefined ? nullableStr(b.phone) : undefined);
+  setIf('email', b.email !== undefined ? nullableStr(b.email) : undefined);
+  setIf('assembly', b.assembly !== undefined ? nullableStr(b.assembly) : undefined);
+  setIf('accommodation', b.accommodation !== undefined ? nullableStr(b.accommodation) : undefined);
+  setIf('notes', b.notes !== undefined ? nullableStr(b.notes) : undefined);
   setIf('arrival_date', b.arrivalDate !== undefined ? (b.arrivalDate || null) : undefined);
   setIf('departure_date', b.departureDate !== undefined ? (b.departureDate || null) : undefined);
   setIf('num_adults', b.numAdults !== undefined ? Math.max(1, parseInt(b.numAdults, 10) || 1) : undefined);
@@ -218,11 +223,11 @@ router.patch('/teams/:id', requireAdmin, (req, res) => {
   const fields = [];
   const params = [];
   const setIf = (col, val) => { if (val !== undefined) { fields.push(`${col} = ?`); params.push(val); } };
-  setIf('name', b.name !== undefined ? String(b.name).trim() : undefined);
-  setIf('category', b.category !== undefined ? String(b.category).trim() : undefined);
-  setIf('province', b.province !== undefined ? (String(b.province).trim() || null) : undefined);
+  setIf('name', b.name !== undefined ? str(b.name) : undefined);
+  setIf('category', b.category !== undefined ? str(b.category) : undefined);
+  setIf('province', b.province !== undefined ? nullableStr(b.province) : undefined);
   setIf('color', b.color !== undefined ? b.color : undefined);
-  setIf('notes', b.notes !== undefined ? (String(b.notes).trim() || null) : undefined);
+  setIf('notes', b.notes !== undefined ? nullableStr(b.notes) : undefined);
   if (!fields.length) return res.json(existing);
   params.push(id);
   db.prepare(`UPDATE teams SET ${fields.join(', ')} WHERE id = ?`).run(...params);
@@ -268,8 +273,8 @@ router.patch('/duties/:id', requireAdmin, (req, res) => {
   const setIf = (col, val) => { if (val !== undefined) { fields.push(`${col} = ?`); params.push(val); } };
   setIf('team_id', b.teamId !== undefined ? Number(b.teamId) : undefined);
   setIf('duty_date', b.dutyDate !== undefined ? b.dutyDate : undefined);
-  setIf('task', b.task !== undefined ? String(b.task).trim() : undefined);
-  setIf('notes', b.notes !== undefined ? (String(b.notes).trim() || null) : undefined);
+  setIf('task', b.task !== undefined ? str(b.task) : undefined);
+  setIf('notes', b.notes !== undefined ? nullableStr(b.notes) : undefined);
   if (!fields.length) return res.json(existing);
   params.push(id);
   db.prepare(`UPDATE duties SET ${fields.join(', ')} WHERE id = ?`).run(...params);
@@ -346,7 +351,7 @@ router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
   }
   if (b.reviewerNotes !== undefined) {
     fields.push('reviewer_notes = ?');
-    params.push(String(b.reviewerNotes).trim() || null);
+    params.push(nullableStr(b.reviewerNotes));
   }
 
   // Correcting a mistake in the original submission — available to admins
@@ -360,10 +365,10 @@ router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
     }
     setIf('subcommittee_id', newSubId);
   }
-  if (b.requestorName !== undefined) setIf('requestor_name', String(b.requestorName).trim());
-  if (b.requestorContact !== undefined) setIf('requestor_contact', String(b.requestorContact).trim());
-  if (b.description !== undefined) setIf('description', String(b.description).trim());
-  if (b.recommendedVendor !== undefined) setIf('recommended_vendor', String(b.recommendedVendor).trim() || null);
+  if (b.requestorName !== undefined) setIf('requestor_name', str(b.requestorName));
+  if (b.requestorContact !== undefined) setIf('requestor_contact', str(b.requestorContact));
+  if (b.description !== undefined) setIf('description', str(b.description));
+  if (b.recommendedVendor !== undefined) setIf('recommended_vendor', nullableStr(b.recommendedVendor));
   if (b.amountRequested !== undefined) {
     const amount = parseFloat(b.amountRequested);
     if (!(amount > 0)) return res.status(400).json({ error: 'Please enter a valid amount requested.' });
@@ -378,9 +383,9 @@ router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
     if (!PAYMENT_METHODS.includes(b.paymentMethod)) return res.status(400).json({ error: 'Invalid payment method.' });
     setIf('payment_method', b.paymentMethod);
   }
-  if (b.bankingDetails !== undefined) setIf('banking_details', String(b.bankingDetails).trim() || null);
-  if (b.paymentReference !== undefined) setIf('payment_reference', String(b.paymentReference).trim() || null);
-  if (b.proofOfPaymentEmail !== undefined) setIf('proof_of_payment_email', String(b.proofOfPaymentEmail).trim() || null);
+  if (b.bankingDetails !== undefined) setIf('banking_details', nullableStr(b.bankingDetails));
+  if (b.paymentReference !== undefined) setIf('payment_reference', nullableStr(b.paymentReference));
+  if (b.proofOfPaymentEmail !== undefined) setIf('proof_of_payment_email', nullableStr(b.proofOfPaymentEmail));
   if (b.actualSpent !== undefined) {
     if (b.actualSpent === null || b.actualSpent === '') {
       setIf('actual_spent', null);
@@ -390,7 +395,7 @@ router.patch('/requisitions/:id', requireRequisitionAccess, (req, res) => {
       setIf('actual_spent', spent);
     }
   }
-  if (b.usageNotes !== undefined) setIf('usage_notes', String(b.usageNotes).trim() || null);
+  if (b.usageNotes !== undefined) setIf('usage_notes', nullableStr(b.usageNotes));
 
   if (!fields.length) return res.json(attachExtras(existing));
   params.push(id);
