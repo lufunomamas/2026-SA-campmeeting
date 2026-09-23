@@ -351,6 +351,46 @@ a { color: var(--green); }
 .dash-figures .value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
 .dash-balance { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; padding-top: 12px; border-top: 1px solid var(--line); }
 
+.dash-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.dash-chart-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow-md);
+}
+.dash-chart-card h3 { margin: 0 0 2px; }
+.dash-chart-card .hint { margin: 0 0 16px; }
+
+.bar-chart { display: flex; flex-direction: column; gap: 12px; }
+.bar-row { display: grid; grid-template-columns: 132px 1fr 84px; align-items: center; gap: 10px; }
+.bar-label { font-size: 0.8rem; color: var(--ink-soft); line-height: 1.25; }
+.bar-track { position: relative; height: 16px; background: var(--paper-deep); border-radius: 999px; overflow: hidden; }
+.bar-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; background: var(--gold); transition: width 0.3s ease; }
+.bar-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.8rem; font-weight: 600; text-align: right; }
+
+/* Diverging (savings vs. overspend) chart: track split at a center zero line */
+.bar-track-diverging { position: relative; height: 16px; background: var(--paper-deep); border-radius: 999px; overflow: hidden; }
+.bar-track-diverging::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
+  background: var(--line); transform: translateX(-1px);
+}
+.bar-fill-diverging { position: absolute; top: 0; bottom: 0; border-radius: 999px; transition: width 0.3s ease, left 0.3s ease; }
+.bar-fill-diverging.positive { background: var(--green); }
+.bar-fill-diverging.negative {
+  background-color: var(--brick);
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0 3px, transparent 3px 7px);
+}
+
+@media (max-width: 560px) {
+  .bar-row { grid-template-columns: 92px 1fr 70px; }
+}
+
 /* ============ Contact ============ */
 .contact-grid {
   display: grid;

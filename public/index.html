@@ -97,6 +97,20 @@
       <p id="dash-checkin-notice" class="empty-state" hidden>
         You're signed in as a check-in volunteer — head to the <a href="/staff.html">Staff area</a> to check attendees in.
       </p>
+
+      <div id="dash-charts" class="dash-charts-grid" hidden>
+        <div class="dash-chart-card">
+          <h3>Expenditure by department</h3>
+          <p class="hint">Actual spend reported so far — lowest to highest</p>
+          <div id="chart-expenditure" class="bar-chart"></div>
+        </div>
+        <div class="dash-chart-card">
+          <h3>Savings by department</h3>
+          <p class="hint">Requested vs. actually spent, net — most saved first</p>
+          <div id="chart-savings" class="bar-chart"></div>
+        </div>
+      </div>
+
       <div id="dash-cards" class="dash-grid"></div>
     </section>
   </div>
@@ -186,6 +200,67 @@
         .join('');
     }
 
+    function renderBarChart(containerId, rows, valueFn, color) {
+      const el = document.getElementById(containerId);
+      if (!rows.length) {
+        el.innerHTML = '<p class="empty-state" style="padding:12px 0;">No fund usage reported yet.</p>';
+        return;
+      }
+      const max = Math.max(...rows.map((r) => valueFn(r)), 1);
+      el.innerHTML = rows
+        .map((r) => {
+          const val = valueFn(r);
+          const pct = Math.max(3, (val / max) * 100);
+          return `
+            <div class="bar-row" title="${r.divisionName}: ${fmtMoney(val)}">
+              <span class="bar-label">${r.divisionName}</span>
+              <span class="bar-track">
+                <span class="bar-fill" style="width:${pct}%; background:${color};"></span>
+              </span>
+              <span class="bar-value">${fmtMoney(val)}</span>
+            </div>`;
+        })
+        .join('');
+    }
+
+    function renderDivergingChart(containerId, rows) {
+      const el = document.getElementById(containerId);
+      if (!rows.length) {
+        el.innerHTML = '<p class="empty-state" style="padding:12px 0;">No fund usage reported yet.</p>';
+        return;
+      }
+      const max = Math.max(...rows.map((r) => Math.abs(r.net)), 1);
+      el.innerHTML = rows
+        .map((r) => {
+          const isPositive = r.net >= 0;
+          const pct = Math.max(2, (Math.abs(r.net) / max) * 50);
+          const style = isPositive ? `left:50%; width:${pct}%;` : `left:${50 - pct}%; width:${pct}%;`;
+          const sign = isPositive ? '+' : '−';
+          return `
+            <div class="bar-row" title="${r.divisionName}: ${sign}${fmtMoney(Math.abs(r.net))}">
+              <span class="bar-label">${r.divisionName}</span>
+              <span class="bar-track-diverging">
+                <span class="bar-fill-diverging ${isPositive ? 'positive' : 'negative'}" style="${style}"></span>
+              </span>
+              <span class="bar-value">${sign}${fmtMoney(Math.abs(r.net))}</span>
+            </div>`;
+        })
+        .join('');
+    }
+
+    function renderDashCharts(summaries) {
+      document.getElementById('dash-charts').hidden = false;
+      const withData = summaries.filter((s) => s.reportedCount > 0);
+
+      const byExpenditure = [...withData].sort((a, b) => a.totalActualSpent - b.totalActualSpent);
+      renderBarChart('chart-expenditure', byExpenditure, (s) => s.totalActualSpent, 'var(--gold)');
+
+      const bySavings = withData
+        .map((s) => ({ ...s, net: s.owedToChurch - s.owedToRequestor }))
+        .sort((a, b) => b.net - a.net);
+      renderDivergingChart('chart-savings', bySavings);
+    }
+
     async function initDashboard(session) {
       document.getElementById('public-view').hidden = true;
       document.getElementById('dashboard-view').hidden = false;
@@ -204,6 +279,7 @@
 
       try {
         const summaries = await api('/api/staff/dashboard-summary');
+        if (session.role === 'admin') renderDashCharts(summaries);
         renderDashCards(summaries);
       } catch (e) {
         document.getElementById('dash-cards').innerHTML = '<p class="empty-state">Could not load dashboard.</p>';
